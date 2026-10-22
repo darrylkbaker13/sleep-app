@@ -11,14 +11,26 @@ struct SessionDetailView: View {
     @State private var analysis: NightAnalysis?
     @State private var loaded = false
     @State private var csvURL: URL?
+    @State private var editingCheckIn = false
+
+    /// The latest saved copy, so check-in edits show straight away.
+    private var current: SleepSession {
+        store.sessions.first { $0.id == session.id } ?? session
+    }
 
     var body: some View {
         Group {
             if let analysis {
                 report(analysis)
             } else if loaded {
-                ContentUnavailableView("Not enough data", systemImage: "waveform.slash",
-                                       description: Text("This recording is shorter than a minute."))
+                ScrollView {
+                    VStack(spacing: 20) {
+                        ContentUnavailableView("Not enough data", systemImage: "waveform.slash",
+                                               description: Text("This recording is shorter than a minute."))
+                        SleepNotesCard(session: current) { editingCheckIn = true }
+                    }
+                    .padding()
+                }
             } else {
                 ProgressView("Analyzing…")
             }
@@ -54,6 +66,12 @@ struct SessionDetailView: View {
             loaded = true
         }
         .onDisappear { player.stop() }
+        .sheet(isPresented: $editingCheckIn) {
+            CheckInView(session: current) { updated in
+                if let updated { store.save(updated) }
+                editingCheckIn = false
+            }
+        }
     }
 
     @ViewBuilder
@@ -99,6 +117,8 @@ struct SessionDetailView: View {
                     }
                     .font(.loop(.caption))
                 }
+
+                SleepNotesCard(session: current) { editingCheckIn = true }
 
                 SleepStagesCard(session: session, analysis: a)
 
