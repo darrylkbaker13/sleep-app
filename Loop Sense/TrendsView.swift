@@ -32,6 +32,8 @@ struct TrendsView: View {
     @State private var all: [NightSummary]?
     @State private var range = 7
     @State private var openSessionID: UUID?
+    @State private var earplugComparison: EarplugComparison?
+    @AppStorage("healthConnected") private var healthConnected = false
 
     private var nights: [NightSummary] { Array((all ?? []).suffix(range)) }
     private var quietest: NightSummary? { nights.min { $0.average < $1.average } }
@@ -59,6 +61,9 @@ struct TrendsView: View {
             if let session = store.sessions.first(where: { $0.id == id }) {
                 SessionDetailView(session: session)
             }
+        }
+        .task(id: ComparisonKey(range: range, sessions: store.sessions)) {
+            await loadEarplugComparison()
         }
         .task(id: store.sessions.map(\.id)) {
             let sessions = store.sessions.filter { $0.id != recorder.activeSessionID }
@@ -113,6 +118,10 @@ struct TrendsView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                if let earplugComparison {
+                    EarplugComparisonCard(comparison: earplugComparison)
+                }
+
                 Card("Nights") {
                     ForEach(nights.reversed()) { n in
                         Button { openSessionID = n.id } label: { nightRow(n) }
@@ -132,6 +141,40 @@ struct TrendsView: View {
         return AxisMarks(values: shown) { _ in
             AxisValueLabel().font(.loop(.caption2))
         }
+    }
+
+    /// Reloads when the range changes or a night's earplug tag is edited.
+    private struct ComparisonKey: Equatable {
+        let range: Int
+        let tags: [String]
+        init(range: Int, sessions: [SleepSession]) {
+            self.range = range
+            tags = sessions.map { "\($0.id)|\($0.earplugs ?? "")" }
+        }
+    }
+
+    /// Analyses the nights in range and fetches their sleep stages, then compares earplug nights.
+    private func loadEarplugComparison() async {
+        let sessions = Array(store.sessions
+            .filter { $0.id != recorder.activeSessionID }
+            .sorted { $0.start < $1.start }
+            .suffix(range))
+        let analysed = await Task.detached(priority: .userInitiated) {
+            sessions.compactMap { s in NightAnalysis(session: s).map { (s, $0) } }
+        }.value
+        var nights: [EarplugComparison.Night] = []
+        for (session, analysis) in analysed {
+            nights.append(.init(session: session, analysis: analysis, stages: await stages(for: session)))
+        }
+        earplugComparison = EarplugComparison(nights: nights)
+    }
+
+    private func stages(for session: SleepSession) async -> [SleepInterval] {
+        #if DEBUG
+        if DemoData.isDemo(session) { return DemoData.stages(for: session) }
+        #endif
+        guard healthConnected, HealthSleep.isAvailable else { return [] }
+        return (try? await HealthSleep.intervals(from: session.start, to: session.effectiveEnd)) ?? []
     }
 
     /// Tapping a bar opens that night's report.

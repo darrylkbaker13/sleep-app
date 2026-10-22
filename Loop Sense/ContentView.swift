@@ -196,7 +196,7 @@ private struct SessionRow: View {
     }
 }
 
-func formatDuration(_ seconds: TimeInterval) -> String {
+nonisolated func formatDuration(_ seconds: TimeInterval) -> String {
     let f = DateComponentsFormatter()
     f.allowedUnits = seconds >= 3600 ? [.hour, .minute] : [.minute, .second]
     f.unitsStyle = .abbreviated
