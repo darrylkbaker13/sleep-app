@@ -12,6 +12,8 @@ extension Color {
     static let loopSilver = Color(hex: 0xC7C7CC)     // secondary text, quiet levels
     static let loopCoral = Color(hex: 0xC9676B)      // between the tint and the accent
     static let loopRed = Color(hex: 0xE0283F)        // loud levels, stop button, errors
+    static let loopGood = Color(hex: 0x6CC28A)       // report verdicts: within guidelines
+    static let loopWarn = Color(hex: 0xE8A54F)       // report verdicts: worth a look
 
     init(hex: UInt32) {
         self.init(.sRGB,

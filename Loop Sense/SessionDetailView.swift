@@ -80,14 +80,18 @@ struct SessionDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 // Headline
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(a.verdict).font(.loop(.title2))
+                    Text(a.headline).font(.loop(.title2))
+                    Text(a.subline).foregroundStyle(.secondary)
                     Text("\(a.start.formatted(date: .omitted, time: .shortened)) – \(a.end.formatted(date: .omitted, time: .shortened)) · \(formatDuration(a.end.timeIntervalSince(a.start)))")
+                        .font(.loop(.caption))
                         .foregroundStyle(.secondary)
                 }
 
+                ChipRow(chips: a.chips)
+
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     StatTile(title: "Average", value: a.average, caption: "WHO target ≤ 30")
-                    StatTile(title: "Background", value: a.background, caption: "steady noise floor")
+                    StatTile(title: "Background", value: a.background, caption: "fans, traffic")
                     StatTile(title: "Loudest", value: a.peak, caption: a.peakTime.formatted(date: .omitted, time: .shortened))
                     StatTile(title: "Noise events", count: a.events.count, caption: "\(a.eventsOverWHOPeak) above 45 dB")
                 }
@@ -121,15 +125,6 @@ struct SessionDetailView: View {
                 SleepNotesCard(session: current) { editingCheckIn = true }
 
                 SleepStagesCard(session: session, analysis: a)
-
-                Card("What this means") {
-                    ForEach(a.findings, id: \.self) { line in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("•")
-                            Text(line)
-                        }
-                    }
-                }
 
                 EarplugCard(recommendation: EarplugRecommendation(average: a.average, peak: a.peak))
 
@@ -269,8 +264,15 @@ private struct EarplugCard: View {
                 }
                 Text(model.note).font(.loop(.subheadline)).foregroundStyle(.secondary)
             }
-            Text(recommendation.reason)
-            Text("A guide only. SNR is a lab rating; real-world reduction is usually lower and depends on fit.")
+            Text(recommendation.summary)
+            DisclosureGroup("Why this one") {
+                Text(recommendation.reason)
+                    .font(.loop(.subheadline))
+                    .padding(.top, 4)
+            }
+            .font(.loop(.subheadline))
+            .tint(Color.loopAccent)
+            Text("A guide: real-world reduction is lower than SNR.")
                 .font(.loop(.caption))
                 .foregroundStyle(.secondary)
             Link(destination: LoopModel.siteURL) {
