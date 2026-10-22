@@ -112,6 +112,7 @@ private struct RecordPanel: View {
     @EnvironmentObject private var recorder: NightRecorder
     let calibrationOffset: Double
     let saveAudio: Bool
+    @State private var bedtimeWarnings: [String] = []
 
     var body: some View {
         VStack(spacing: 16) {
@@ -142,7 +143,8 @@ private struct RecordPanel: View {
                 if recorder.isRecording {
                     recorder.stop()
                 } else {
-                    Task { await recorder.start(calibrationOffset: calibrationOffset, saveAudio: saveAudio) }
+                    let warnings = BedtimeChecks.current().warnings
+                    if warnings.isEmpty { startRecording() } else { bedtimeWarnings = warnings }
                 }
             } label: {
                 Label(recorder.isRecording ? "Stop & analyze" : "Start sleep recording",
@@ -156,6 +158,19 @@ private struct RecordPanel: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
+        .alert("Before you sleep", isPresented: Binding(
+            get: { !bedtimeWarnings.isEmpty },
+            set: { if !$0 { bedtimeWarnings = [] } }
+        )) {
+            Button("Start anyway") { startRecording() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(bedtimeWarnings.joined(separator: "\n\n"))
+        }
+    }
+
+    private func startRecording() {
+        Task { await recorder.start(calibrationOffset: calibrationOffset, saveAudio: saveAudio) }
     }
 }
 
