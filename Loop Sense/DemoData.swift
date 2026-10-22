@@ -50,17 +50,27 @@ nonisolated enum DemoData {
         var snoring: ClosedRange<Double>? = nil   // hours into the night
         var bigBang: Double? = nil                // hours into the night: one very loud noise
         var rain = false
+        // Morning check-in.
+        var rating: Int? = nil
+        var tags: [String] = []
+        var earplugs: String? = nil
     }
 
     /// Most recent night first.
     private static let profiles: [Profile] = [
-        Profile(background: 29, eventsPerHour: 1.5, eventPeak: 42...52),                       // quiet
-        Profile(background: 34, eventsPerHour: 5, eventPeak: 48...64),                          // traffic
-        Profile(background: 30, eventsPerHour: 1.5, eventPeak: 42...50, snoring: 1.5...3.5),   // partner snoring
-        Profile(background: 28, eventsPerHour: 1, eventPeak: 40...48, bigBang: 4.2),            // door slam
-        Profile(background: 38, eventsPerHour: 8, eventPeak: 52...70),                          // noisy weekend street
-        Profile(background: 41, eventsPerHour: 1, eventPeak: 48...55, rain: true),              // rain
-        Profile(background: 32, eventsPerHour: 3, eventPeak: 45...58),                          // average
+        Profile(background: 29, eventsPerHour: 1.5, eventPeak: 42...52,                         // quiet
+                rating: 5, tags: ["Window open"]),
+        Profile(background: 34, eventsPerHour: 5, eventPeak: 48...64,                           // traffic
+                rating: 4, earplugs: "Loop Dream"),
+        Profile(background: 30, eventsPerHour: 1.5, eventPeak: 42...50, snoring: 1.5...3.5,     // partner snoring
+                rating: 2),
+        Profile(background: 28, eventsPerHour: 1, eventPeak: 40...48, bigBang: 4.2,             // door slam
+                rating: 3, tags: ["Partner away"]),
+        Profile(background: 38, eventsPerHour: 8, eventPeak: 52...70,                           // noisy weekend street
+                rating: 2, tags: ["Alcohol", "Window open"]),
+        Profile(background: 41, eventsPerHour: 1, eventPeak: 48...55, rain: true,               // rain
+                rating: 4, tags: ["Fan or AC on"], earplugs: "Loop Quiet 2"),
+        Profile(background: 32, eventsPerHour: 3, eventPeak: 45...58),                          // average, no check-in
     ]
 
     private static let calibrationOffset = 95.0
@@ -119,8 +129,12 @@ nonisolated enum DemoData {
 
         let levels = db.map { Float($0 - calibrationOffset) }
         let id = UUID(uuidString: String(format: "\(idPrefix)-0000-4000-8000-%012d", n))!
-        return SleepSession(id: id, start: start, end: start.addingTimeInterval(Double(seconds)),
-                            calibrationOffset: calibrationOffset, levels: levels, audioFileName: nil)
+        var session = SleepSession(id: id, start: start, end: start.addingTimeInterval(Double(seconds)),
+                                   calibrationOffset: calibrationOffset, levels: levels, audioFileName: nil)
+        session.rating = p.rating
+        session.tags = p.tags.isEmpty ? nil : p.tags
+        session.earplugs = p.earplugs
+        return session
     }
 
     private static func addEvent(_ db: inout [Double], at: Int, length: Int, peak: Double, rng: inout SeededRNG) {

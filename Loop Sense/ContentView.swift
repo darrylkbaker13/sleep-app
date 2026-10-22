@@ -5,6 +5,8 @@ struct ContentView: View {
     @EnvironmentObject private var recorder: NightRecorder
     @AppStorage("calibrationOffset") private var calibrationOffset = 95.0
     @AppStorage("saveAudio") private var saveAudio = true
+    /// The night just recorded, shown in the morning check-in.
+    @State private var checkInSession: SleepSession?
     #if DEBUG
     @State private var addingDemo = false
     #endif
@@ -94,6 +96,18 @@ struct ContentView: View {
                 #endif
             }
             .loopBackground()
+            .onChange(of: recorder.activeSessionID) { finished, current in
+                // A recording just stopped: ask how the night went.
+                if let finished, current == nil {
+                    checkInSession = store.sessions.first { $0.id == finished }
+                }
+            }
+            .sheet(item: $checkInSession) { session in
+                CheckInView(session: session) { updated in
+                    if let updated { store.save(updated) }
+                    checkInSession = nil
+                }
+            }
             .navigationTitle("Loop Sense")
             .toolbar(.hidden, for: .navigationBar)
             .alert("Recording problem", isPresented: Binding(

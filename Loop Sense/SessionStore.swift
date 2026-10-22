@@ -11,6 +11,12 @@ nonisolated struct SleepSession: Codable, Identifiable {
     var calibrationOffset: Double
     var levels: [Float]
     var audioFileName: String?
+    /// Morning check-in: how the night felt, 1 (awful) to 5 (great). nil until answered.
+    var rating: Int? = nil
+    /// Sleep notes such as "Window open". Earplugs are kept separately in `earplugs`.
+    var tags: [String]? = nil
+    /// Earplugs worn that night: a Loop model name or `SleepNotes.otherEarplugs`. nil means none.
+    var earplugs: String? = nil
 
     var effectiveEnd: Date { end ?? start.addingTimeInterval(Double(levels.count)) }
     var duration: TimeInterval { effectiveEnd.timeIntervalSince(start) }
