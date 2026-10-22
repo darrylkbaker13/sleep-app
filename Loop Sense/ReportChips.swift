@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A short at-a-glance fact on the report, e.g. "Within WHO guideline". Tapping it shows `detail`.
 nonisolated struct ReportChip: Identifiable, Hashable {
-    enum Tone: Hashable { case good, warning, neutral }
+    enum Tone: Hashable { case good, warning, bad, neutral }
 
     var id: String { text }
     /// SF Symbol name.
@@ -18,8 +18,36 @@ extension ReportChip.Tone {
         switch self {
         case .good: .loopGood
         case .warning: .loopWarn
+        case .bad: .loopRed
         case .neutral: .loopSilver
         }
+    }
+}
+
+/// Headline, supporting line and chips: the "how was my night" answer at a glance.
+/// Shared so other screens (e.g. a morning summary) can use the same style.
+struct ReportHeadline: View {
+    let title: String
+    let tone: ReportChip.Tone
+    let subline: String
+    var caption: String? = nil
+    let chips: [ReportChip]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.loop(.title2))
+                    .foregroundStyle(tone.color)
+                    .accessibilityAddTraits(.isHeader)
+                Text(subline)
+                if let caption {
+                    Text(caption).font(.loop(.caption)).foregroundStyle(.secondary)
+                }
+            }
+            ChipRow(chips: chips)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
