@@ -174,7 +174,7 @@ struct SleepStagesCard: View {
                 Text("No sleep data found in Apple Health for this night. Check that your watch has synced to Garmin Connect, and that Garmin Connect is sharing sleep with Apple Health.")
                     .foregroundStyle(.secondary)
             } else {
-                Text("See how noise lined up with your sleep. Garmin Connect can share your sleep stages with Apple Health, and Sleep Sound reads them from there.")
+                Text("See how noise lined up with your sleep. Garmin Connect can share your sleep stages with Apple Health, and Loop Sense reads them from there.")
                     .foregroundStyle(.secondary)
                 Button("Connect Apple Health") {
                     Task { await load(requestAccess: true) }

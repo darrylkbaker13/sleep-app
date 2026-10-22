@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// Shown briefly when the app opens. Add an image named "SplashLogo" to Assets.xcassets to use
-/// your own logo; without one, a Sleep Sound wordmark is shown instead.
+/// your own logo; without one, a Loop Sense wordmark is shown instead.
 struct SplashView: View {
     @State private var appeared = false
 
