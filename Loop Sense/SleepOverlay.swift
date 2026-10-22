@@ -187,6 +187,12 @@ struct SleepStagesCard: View {
             }
         }
         .task {
+            #if DEBUG
+            if DemoData.isDemo(session) {
+                intervals = DemoData.stages(for: session)
+                return
+            }
+            #endif
             if healthConnected { await load(requestAccess: false) }
         }
     }

@@ -5,6 +5,9 @@ struct ContentView: View {
     @EnvironmentObject private var recorder: NightRecorder
     @AppStorage("calibrationOffset") private var calibrationOffset = 95.0
     @AppStorage("saveAudio") private var saveAudio = true
+    #if DEBUG
+    @State private var addingDemo = false
+    #endif
 
     private var pastSessions: [SleepSession] {
         store.sessions.filter { $0.id != recorder.activeSessionID }
@@ -67,6 +70,28 @@ struct ContentView: View {
                 }
                 .listRowBackground(Color.loopSurface)
                 .disabled(recorder.isRecording)
+
+                #if DEBUG
+                Section {
+                    Button(addingDemo ? "Adding demo nights…" : "Add 7 demo nights") {
+                        addingDemo = true
+                        Task {
+                            await DemoData.add(to: store)
+                            addingDemo = false
+                        }
+                    }
+                    .disabled(addingDemo)
+                    if DemoData.count(in: store) > 0 {
+                        Button("Remove demo nights", role: .destructive) { DemoData.remove(from: store) }
+                    }
+                } header: {
+                    Text("Demo data")
+                } footer: {
+                    Text("Debug builds only. Adds seven made-up nights with Garmin-style sleep stages for testing. Remove deletes only these, never real recordings.")
+                }
+                .listRowBackground(Color.loopSurface)
+                .disabled(recorder.isRecording)
+                #endif
             }
             .loopBackground()
             .navigationTitle("Loop Sense")
