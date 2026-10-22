@@ -37,13 +37,20 @@ struct SplashView: View {
     }
 }
 
-/// Shows the splash, then cross-fades into the app.
+/// Shows the splash, then cross-fades into the app (or into onboarding on first run).
 struct RootView: View {
     @State private var showSplash = true
+    @AppStorage("hasOnboarded") private var hasOnboarded = false
 
     var body: some View {
         ZStack {
             ContentView()
+            if !hasOnboarded {
+                OnboardingView {
+                    withAnimation(.easeInOut(duration: 0.4)) { hasOnboarded = true }
+                }
+                .transition(.opacity)
+            }
             if showSplash {
                 SplashView()
                     .transition(.opacity)
