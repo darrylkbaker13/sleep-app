@@ -111,6 +111,8 @@ struct SessionDetailView: View {
                     }
                 }
 
+                EarplugCard(recommendation: EarplugRecommendation(average: a.average, peak: a.peak))
+
                 Card("Time at each level") {
                     ForEach(a.bands) { band in
                         VStack(alignment: .leading, spacing: 4) {
@@ -229,6 +231,49 @@ struct Card<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(Color.loopSurface, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+private struct EarplugCard: View {
+    let recommendation: EarplugRecommendation
+
+    var body: some View {
+        Card("Loop earplugs for this room") {
+            if let model = recommendation.model {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(model.name).font(.loop(.title3))
+                    Spacer()
+                    Text(model.snrText)
+                        .font(.loop(.subheadline)).monospacedDigit()
+                        .foregroundStyle(Color.loopAccent)
+                }
+                Text(model.note).font(.loop(.subheadline)).foregroundStyle(.secondary)
+            }
+            Text(recommendation.reason)
+            Text("A guide only. SNR is a lab rating; real-world reduction is usually lower and depends on fit.")
+                .font(.loop(.caption))
+                .foregroundStyle(.secondary)
+            Link(destination: LoopModel.siteURL) {
+                Label("See Loop earplugs", systemImage: "arrow.up.right.square")
+            }
+            .foregroundStyle(Color.loopAccent)
+            DisclosureGroup("Compare Loop models") {
+                ForEach(LoopModel.all.filter { !$0.kidsOnly }) { m in
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(m.name)
+                            Text(m.note).font(.loop(.caption)).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(m.snrText).monospacedDigit().foregroundStyle(.secondary)
+                    }
+                    .font(.loop(.subheadline))
+                    .padding(.top, 6)
+                }
+            }
+            .font(.loop(.subheadline))
+            .tint(Color.loopAccent)
+        }
     }
 }
 
