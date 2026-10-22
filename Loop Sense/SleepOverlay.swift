@@ -3,7 +3,7 @@ import HealthKit
 import SwiftUI
 
 /// Sleep stages as Garmin Connect (or any other app) writes them to Apple Health.
-enum SleepStage: Int, CaseIterable {
+nonisolated enum SleepStage: Int, CaseIterable {
     case awake, rem, light, deep
 
     var label: String {
@@ -15,7 +15,7 @@ enum SleepStage: Int, CaseIterable {
         }
     }
 
-    var color: Color {
+    @MainActor var color: Color {
         switch self {
         case .awake: return .loopRed
         case .rem: return .loopRoseGold
@@ -25,7 +25,7 @@ enum SleepStage: Int, CaseIterable {
     }
 }
 
-struct SleepInterval: Identifiable {
+nonisolated struct SleepInterval: Identifiable {
     let id = UUID()
     let start: Date
     let end: Date
@@ -78,6 +78,27 @@ enum HealthSleep {
 struct SleepInsights {
     let findings: [String]
 
+    /// Awake periods between first falling asleep and last waking, merging ones under a minute apart.
+    nonisolated static func awakenings(in intervals: [SleepInterval]) -> [Date] {
+        let asleep = intervals.filter { $0.stage != .awake }
+        var awakenings: [Date] = []
+        if let firstSleep = asleep.map(\.start).min(), let lastSleep = asleep.map(\.end).max() {
+            var previousEnd = Date.distantPast
+            for awake in intervals.filter({ $0.stage == .awake }).sorted(by: { $0.start < $1.start }) {
+                if awake.start > firstSleep, awake.start < lastSleep,
+                   awake.start.timeIntervalSince(previousEnd) > 60 {
+                    awakenings.append(awake.start)
+                }
+                previousEnd = awake.end
+            }
+        }
+        return awakenings
+    }
+
+    nonisolated static func deepSleepSeconds(in intervals: [SleepInterval]) -> Double {
+        intervals.filter { $0.stage == .deep }.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
+    }
+
     init(intervals: [SleepInterval], session: SleepSession, analysis: NightAnalysis) {
         var seconds: [SleepStage: Double] = [:]
         var energy: [SleepStage: (sum: Double, n: Int)] = [:]
@@ -97,19 +118,7 @@ struct SleepInsights {
             return 10 * log10(e.sum / Double(e.n))
         }
 
-        // Awakenings: awake periods between first falling asleep and last waking, merging ones under a minute apart.
-        let asleep = intervals.filter { $0.stage != .awake }
-        var awakenings: [Date] = []
-        if let firstSleep = asleep.map(\.start).min(), let lastSleep = asleep.map(\.end).max() {
-            var previousEnd = Date.distantPast
-            for awake in intervals.filter({ $0.stage == .awake }).sorted(by: { $0.start < $1.start }) {
-                if awake.start > firstSleep, awake.start < lastSleep,
-                   awake.start.timeIntervalSince(previousEnd) > 60 {
-                    awakenings.append(awake.start)
-                }
-                previousEnd = awake.end
-            }
-        }
+        let awakenings = Self.awakenings(in: intervals)
 
         // A wake-up is "noise-linked" if a noise event started in the 2 minutes before it (or just after).
         var noiseWakeups: [(time: Date, peak: Double)] = []

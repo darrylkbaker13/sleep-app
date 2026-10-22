@@ -172,8 +172,9 @@ nonisolated enum DemoData {
         }
         for k in max(0, minutes - rng.int(4...9))..<minutes { stage[k] = .awake }
 
-        // Some loud noises wake you briefly, starting within a minute of the noise.
-        for event in loudEvents where rng.double(0...1) < 0.55 {
+        // Some loud noises wake you briefly, starting within a minute of the noise. Earplugs make it less likely.
+        let wakeChance = session.earplugs == nil ? 0.55 : 0.15
+        for event in loudEvents where rng.double(0...1) < wakeChance {
             let at = Int(event.start.timeIntervalSince(session.start) / 60) + rng.int(0...1)
             for k in at..<min(minutes, at + rng.int(2...5)) where k >= onset { stage[k] = .awake }
         }
