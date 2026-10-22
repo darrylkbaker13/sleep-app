@@ -31,6 +31,14 @@ struct ContentView: View {
                         Text("No recordings yet. Tap Start before bed.")
                             .foregroundStyle(.secondary)
                     }
+                    if pastSessions.count >= 2 {
+                        NavigationLink {
+                            TrendsView()
+                        } label: {
+                            Label("Trends across nights", systemImage: "chart.bar.xaxis")
+                                .foregroundStyle(Color.loopAccent)
+                        }
+                    }
                     ForEach(pastSessions) { session in
                         NavigationLink {
                             SessionDetailView(session: session)
