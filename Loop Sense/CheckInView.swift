@@ -209,7 +209,7 @@ struct SleepNotesCard: View {
         Card("How you slept") {
             let notes = (session.earplugs.map { [$0] } ?? []) + (session.tags ?? [])
             if session.rating == nil, notes.isEmpty {
-                Text("Add how the night felt and anything that was different, like a window open or earplugs.")
+                Text("How did the night feel? Add a rating and notes.")
                     .foregroundStyle(.secondary)
             } else {
                 if let rating = session.rating {

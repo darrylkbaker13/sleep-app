@@ -76,7 +76,8 @@ enum HealthSleep {
 
 /// Lines sleep stages up against the noise recording.
 struct SleepInsights {
-    let findings: [String]
+    /// e.g. "3 wake-ups · 2 after a noise", "7h 12m asleep · 1h 20m deep".
+    let chips: [ReportChip]
 
     /// Awake periods between first falling asleep and last waking, merging ones under a minute apart.
     nonisolated static func awakenings(in intervals: [SleepInterval]) -> [Date] {
@@ -131,30 +132,40 @@ struct SleepInsights {
             }
         }
 
-        var findings: [String] = []
+        var chips: [ReportChip] = []
         let asleepSeconds = (seconds[.light] ?? 0) + (seconds[.deep] ?? 0) + (seconds[.rem] ?? 0)
-        if asleepSeconds > 0 {
-            findings.append("Garmin recorded \(formatDuration(asleepSeconds)) asleep: \(formatDuration(seconds[.deep] ?? 0)) deep, \(formatDuration(seconds[.light] ?? 0)) light and \(formatDuration(seconds[.rem] ?? 0)) REM, plus \(formatDuration(seconds[.awake] ?? 0)) awake.")
-        }
 
+        let wakeText: String
+        let wakeDetail: String
         if awakenings.isEmpty {
-            findings.append("You didn't wake up during the night.")
+            wakeText = "No wake-ups"
+            wakeDetail = "Garmin didn't record you waking during the night."
         } else if noiseWakeups.isEmpty {
-            findings.append("You woke \(awakenings.count) time\(awakenings.count == 1 ? "" : "s"), but none came right after a noise, so something else probably woke you.")
+            wakeText = "\(awakenings.count) wake-up\(awakenings.count == 1 ? "" : "s") · none after a noise"
+            wakeDetail = "You woke \(awakenings.count) time\(awakenings.count == 1 ? "" : "s"), but none came right after a noise, so something else probably woke you."
         } else {
-            findings.append("You woke \(awakenings.count) time\(awakenings.count == 1 ? "" : "s"). \(noiseWakeups.count) of those came within 2 minutes of a noise.")
+            wakeText = "\(awakenings.count) wake-up\(awakenings.count == 1 ? "" : "s") · \(noiseWakeups.count) after a noise"
             let list = noiseWakeups.prefix(5).map {
                 "\($0.time.formatted(date: .omitted, time: .shortened)) (\(Int($0.peak.rounded())) dB)"
             }
-            findings.append("Noise-linked wake-ups: \(list.joined(separator: ", ")).")
+            wakeDetail = "You woke \(awakenings.count) time\(awakenings.count == 1 ? "" : "s"). \(noiseWakeups.count) of those came within 2 minutes of a noise: \(list.joined(separator: ", "))."
+        }
+        chips.append(ReportChip(icon: "eye.fill", text: wakeText,
+                                tone: noiseWakeups.isEmpty ? .good : .warning, detail: wakeDetail))
+
+        if asleepSeconds > 0 {
+            chips.append(ReportChip(icon: "bed.double.fill",
+                                    text: "\(formatDuration(asleepSeconds)) asleep · \(formatDuration(seconds[.deep] ?? 0)) deep",
+                                    tone: .neutral,
+                                    detail: "Garmin recorded \(formatDuration(asleepSeconds)) asleep: \(formatDuration(seconds[.deep] ?? 0)) deep, \(formatDuration(seconds[.light] ?? 0)) light and \(formatDuration(seconds[.rem] ?? 0)) REM, plus \(formatDuration(seconds[.awake] ?? 0)) awake."))
         }
 
-        if let deep = average(.deep), let awake = average(.awake) {
-            findings.append(String(format: "Your room averaged %.0f dB during deep sleep and %.0f dB while you were awake.", deep, awake))
-        } else if let deep = average(.deep) {
-            findings.append(String(format: "Your room averaged %.0f dB during deep sleep.", deep))
+        if let deep = average(.deep) {
+            let awakeNote = average(.awake).map { String(format: " and %.0f dB while you were awake", $0) } ?? ""
+            chips.append(ReportChip(icon: "moon.zzz.fill", text: "Deep sleep at \(Int(deep.rounded())) dB", tone: .neutral,
+                                    detail: String(format: "Your room averaged %.0f dB during deep sleep", deep) + awakeNote + "."))
         }
-        self.findings = findings
+        self.chips = chips
     }
 }
 
@@ -170,21 +181,19 @@ struct SleepStagesCard: View {
         Card("Sleep stages") {
             if let intervals, !intervals.isEmpty {
                 hypnogram(intervals)
-                let insights = SleepInsights(intervals: intervals, session: session, analysis: analysis)
-                ForEach(insights.findings, id: \.self) { line in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("•")
-                        Text(line)
-                    }
-                }
+                ChipRow(chips: SleepInsights(intervals: intervals, session: session, analysis: analysis).chips)
             } else if loading {
                 ProgressView()
             } else if intervals != nil {
-                Text("No sleep data found in Apple Health for this night. Check that your watch has synced to Garmin Connect, and that Garmin Connect is sharing sleep with Apple Health.")
+                Text("No Garmin sleep data for this night.")
                     .foregroundStyle(.secondary)
+                Text("Check your watch has synced and Garmin Connect shares sleep with Apple Health.")
+                    .font(.loop(.caption)).foregroundStyle(.secondary)
             } else {
-                Text("See how noise lined up with your sleep. Garmin Connect can share your sleep stages with Apple Health, and Loop Sense reads them from there.")
+                Text("See noise against your Garmin sleep stages.")
                     .foregroundStyle(.secondary)
+                Text("Loop Sense reads them from Apple Health.")
+                    .font(.loop(.caption)).foregroundStyle(.secondary)
                 Button("Connect Apple Health") {
                     Task { await load(requestAccess: true) }
                 }
