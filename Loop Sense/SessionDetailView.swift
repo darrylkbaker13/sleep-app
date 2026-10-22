@@ -156,6 +156,12 @@ struct SessionDetailView: View {
                 Text("Readings are approximate and unweighted. Phone microphones aren't calibrated sound meters, so treat the numbers as a guide and compare nights with each other.")
                     .font(.loop(.footnote))
                     .foregroundStyle(.secondary)
+
+                #if DEBUG
+                if let audio = store.audioURL(for: session) {
+                    ClassifierSpikeCard(session: session, audio: audio, events: a.events)
+                }
+                #endif
             }
             .padding()
         }
@@ -276,6 +282,54 @@ private struct EarplugCard: View {
         }
     }
 }
+
+#if DEBUG
+/// I2a spike: runs Apple's sound classifier over this night's audio and lists the top labels per
+/// noise event. Debug builds only; the text can be shared for the write-up.
+private struct ClassifierSpikeCard: View {
+    let session: SleepSession
+    let audio: URL
+    let events: [LoudEvent]
+    @State private var report: String?
+    @State private var running = false
+
+    var body: some View {
+        Card("Name the noises (debug)") {
+            if let report {
+                Text(report)
+                    .font(.system(.caption2, design: .monospaced))
+                    .textSelection(.enabled)
+                ShareLink("Share results", item: report)
+                    .foregroundStyle(Color.loopAccent)
+            } else {
+                Text("Runs Apple's built-in sound classifier over this night's audio and lists the top 3 labels for each noise event.")
+                    .foregroundStyle(.secondary)
+                Button(running ? "Classifying…" : "Run sound classifier") { run() }
+                    .disabled(running)
+                    .foregroundStyle(Color.loopAccent)
+            }
+        }
+    }
+
+    private func run() {
+        running = true
+        let session = session, audio = audio, events = events
+        Task {
+            let text = await Task.detached(priority: .userInitiated) {
+                do {
+                    let result = try SoundClassifier.classify(fileAt: audio, events: events)
+                    let title = "Night of \(session.start.formatted(date: .abbreviated, time: .shortened)) (on device)"
+                    return SoundClassifier.report(result, title: title)
+                } catch {
+                    return "Classifier failed: \(error.localizedDescription)"
+                }
+            }.value
+            report = text
+            running = false
+        }
+    }
+}
+#endif
 
 private struct Legend: View {
     let color: Color
