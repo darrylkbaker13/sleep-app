@@ -202,7 +202,7 @@ nonisolated enum CSVExporter {
             csv += "\(i),\(iso.string(from: t)),\(value)\n"
         }
         let day = session.start.formatted(.iso8601.year().month().day())
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("SleepSound-\(day).csv")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("LoopSense-\(day).csv")
         try csv.write(to: url, atomically: true, encoding: .utf8)
         return url
     }

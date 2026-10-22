@@ -53,7 +53,7 @@ struct ContentView: View {
                 .disabled(recorder.isRecording)
             }
             .loopBackground()
-            .navigationTitle("Sleep Sound")
+            .navigationTitle("Loop Sense")
             .toolbarBackground(Color.loopMidnight, for: .navigationBar)
             .alert("Recording problem", isPresented: Binding(
                 get: { recorder.errorMessage != nil },

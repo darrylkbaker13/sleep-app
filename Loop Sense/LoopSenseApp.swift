@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SleepSoundApp: App {
+struct LoopSenseApp: App {
     @StateObject private var store: SessionStore
     @StateObject private var recorder: NightRecorder
 
