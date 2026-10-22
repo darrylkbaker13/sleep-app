@@ -76,7 +76,7 @@ struct SessionDetailView: View {
                             AreaMark(x: .value("Time", p.time), yStart: .value("Avg", p.average), yEnd: .value("Peak", p.peak))
                                 .foregroundStyle(Color.loopRoseGold.opacity(0.3))
                             LineMark(x: .value("Time", p.time), y: .value("Average", p.average))
-                                .foregroundStyle(Color.loopGold)
+                                .foregroundStyle(Color.loopAccent)
                                 .lineStyle(StrokeStyle(lineWidth: 1.5))
                         }
                         RuleMark(y: .value("WHO", WHO.averageLimit))
@@ -90,7 +90,7 @@ struct SessionDetailView: View {
                     .chartXScale(domain: a.start...a.end)
                     .frame(height: 220)
                     HStack(spacing: 16) {
-                        Legend(color: .loopGold, label: "Minute average")
+                        Legend(color: .loopAccent, label: "Minute average")
                         Legend(color: .loopRoseGold.opacity(0.6), label: "Minute peak")
                     }
                     .font(.caption)

@@ -90,7 +90,7 @@ private struct RecordPanel: View {
             } else {
                 Image(systemName: "moon.zzz.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(Color.loopGold)
+                    .foregroundStyle(Color.loopAccent)
                 Text("Plug in your phone and place it near your bed, mic uncovered.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -109,8 +109,8 @@ private struct RecordPanel: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .tint(recorder.isRecording ? Color.loopRed : Color.loopGold)
-            .foregroundStyle(recorder.isRecording ? Color.white : Color.loopMidnight)
+            .tint(recorder.isRecording ? Color.loopRed : Color.loopAccent)
+            .foregroundStyle(Color.loopOnAccent)
             .controlSize(.large)
         }
         .frame(maxWidth: .infinity)

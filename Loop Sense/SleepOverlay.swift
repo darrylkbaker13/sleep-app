@@ -20,7 +20,7 @@ enum SleepStage: Int, CaseIterable {
         case .awake: return .loopRed
         case .rem: return .loopRoseGold
         case .light: return .loopSilver
-        case .deep: return .loopGold
+        case .deep: return .loopAccent
         }
     }
 }
@@ -180,7 +180,7 @@ struct SleepStagesCard: View {
                     Task { await load(requestAccess: true) }
                 }
                 .buttonStyle(.borderedProminent)
-                .foregroundStyle(Color.loopMidnight)
+                .foregroundStyle(Color.loopOnAccent)
             }
             if let errorText {
                 Text(errorText).font(.caption).foregroundStyle(Color.loopRed)

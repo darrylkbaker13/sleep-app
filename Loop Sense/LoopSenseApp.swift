@@ -16,7 +16,7 @@ struct LoopSenseApp: App {
             RootView()
                 .environmentObject(store)
                 .environmentObject(recorder)
-                .tint(.loopGold)
+                .tint(.loopAccent)
                 .preferredColorScheme(.dark)
         }
     }
