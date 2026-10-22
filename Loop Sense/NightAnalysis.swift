@@ -56,6 +56,8 @@ nonisolated struct NightAnalysis {
     let chart: [ChartPoint]
     let hours: [HourSummary]
     let verdict: String
+    /// Green for quiet nights, amber for moderately noisy, red for noisy.
+    let verdictTone: ReportChip.Tone
     /// "Quiet night · 31 dB average"
     let headline: String
     /// One supporting line, e.g. "18 noises · noisiest around 05:00".
@@ -161,6 +163,11 @@ nonisolated struct NightAnalysis {
         let loudHour = hours.count >= 2 ? hours.max(by: { $0.average < $1.average }) : nil
         let quietHour = hours.count >= 2 ? hours.min(by: { $0.average < $1.average }) : nil
 
+        switch average {
+        case ..<35: verdictTone = .good
+        case ..<45: verdictTone = .warning
+        default: verdictTone = .bad
+        }
         headline = "\(verdict) · \(Int(average.rounded())) dB average"
         if events.isEmpty {
             subline = "Steady all night, no noise spikes"

@@ -17,7 +17,7 @@ nonisolated enum SleepStage: Int, CaseIterable {
 
     @MainActor var color: Color {
         switch self {
-        case .awake: return .loopRed
+        case .awake: return .loopWarn
         case .rem: return .loopRoseGold
         case .light: return .loopSilver
         case .deep: return .loopAccent
@@ -166,93 +166,5 @@ struct SleepInsights {
                                     detail: String(format: "Your room averaged %.0f dB during deep sleep", deep) + awakeNote + "."))
         }
         self.chips = chips
-    }
-}
-
-struct SleepStagesCard: View {
-    let session: SleepSession
-    let analysis: NightAnalysis
-    @AppStorage("healthConnected") private var healthConnected = false
-    @State private var intervals: [SleepInterval]?
-    @State private var loading = false
-    @State private var errorText: String?
-
-    var body: some View {
-        Card("Sleep stages") {
-            if let intervals, !intervals.isEmpty {
-                hypnogram(intervals)
-                ChipRow(chips: SleepInsights(intervals: intervals, session: session, analysis: analysis).chips)
-            } else if loading {
-                ProgressView()
-            } else if intervals != nil {
-                Text("No Garmin sleep data for this night.")
-                    .foregroundStyle(.secondary)
-                Text("Check your watch has synced and Garmin Connect shares sleep with Apple Health.")
-                    .font(.loop(.caption)).foregroundStyle(.secondary)
-            } else {
-                Text("See noise against your Garmin sleep stages.")
-                    .foregroundStyle(.secondary)
-                Text("Loop Sense reads them from Apple Health.")
-                    .font(.loop(.caption)).foregroundStyle(.secondary)
-                Button("Connect Apple Health") {
-                    Task { await load(requestAccess: true) }
-                }
-                .buttonStyle(.borderedProminent)
-                .foregroundStyle(Color.loopOnAccent)
-            }
-            if let errorText {
-                Text(errorText).font(.loop(.caption)).foregroundStyle(Color.loopRed)
-            }
-        }
-        .task {
-            #if DEBUG
-            if DemoData.isDemo(session) {
-                intervals = DemoData.stages(for: session)
-                return
-            }
-            #endif
-            if healthConnected { await load(requestAccess: false) }
-        }
-    }
-
-    private func hypnogram(_ intervals: [SleepInterval]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Chart {
-                ForEach(intervals) { s in
-                    RectangleMark(xStart: .value("Start", s.start),
-                                  xEnd: .value("End", s.end),
-                                  y: .value("Stage", s.stage.label))
-                        .foregroundStyle(s.stage.color)
-                }
-                ForEach(analysis.events) { e in
-                    RuleMark(x: .value("Noise", e.start))
-                        .foregroundStyle(Color.loopRed.opacity(0.6))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 2]))
-                }
-            }
-            .chartXScale(domain: analysis.start...analysis.end)
-            .chartYScale(domain: SleepStage.allCases.map(\.label))
-            .frame(height: 150)
-            Text("Dashed red lines are noise events.")
-                .font(.loop(.caption))
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func load(requestAccess: Bool) async {
-        guard HealthSleep.isAvailable else {
-            errorText = "Apple Health isn't available on this device."
-            return
-        }
-        loading = true
-        defer { loading = false }
-        do {
-            if requestAccess { try await HealthSleep.requestAccess() }
-            intervals = try await HealthSleep.intervals(from: analysis.start, to: analysis.end)
-            healthConnected = true
-            errorText = nil
-        } catch {
-            errorText = "Couldn't read Apple Health: \(error.localizedDescription)"
-        }
     }
 }
