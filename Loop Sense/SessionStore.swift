@@ -4,7 +4,7 @@ import Combine
 /// One night's recording. Levels are stored once per second in dBFS (digital full scale, ≤ 0).
 /// Adding `calibrationOffset` converts them to approximate dB SPL (what a sound meter reads).
 /// Seconds where the microphone wasn't running (e.g. a phone call interrupted us) are NaN.
-struct SleepSession: Codable, Identifiable {
+nonisolated struct SleepSession: Codable, Identifiable {
     let id: UUID
     var start: Date
     var end: Date?

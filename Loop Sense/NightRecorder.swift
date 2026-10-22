@@ -4,7 +4,7 @@ import Combine
 
 /// Turns raw microphone samples into one dBFS reading per second.
 /// Called from the audio tap thread, read from the main thread, so everything is behind a lock.
-final class LevelAccumulator: @unchecked Sendable {
+nonisolated final class LevelAccumulator: @unchecked Sendable {
     private let lock = NSLock()
     private var sumSquares = 0.0
     private var count = 0
@@ -130,8 +130,9 @@ final class NightRecorder: ObservableObject {
             lastSave = now
             isRecording = true
             observeInterruptions()
+            // Scheduled on the main run loop, so the callback is already on the main actor.
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                Task { @MainActor in self?.tick() }
+                MainActor.assumeIsolated { self?.tick() }
             }
         } catch {
             errorMessage = "Couldn't start recording: \(error.localizedDescription)"
@@ -196,21 +197,22 @@ final class NightRecorder: ObservableObject {
     }
 
     /// Phone calls, alarms, Siri etc. stop the engine. Restart it when they're done.
+    /// Observers use the main queue, so the callbacks are already on the main actor.
     private func observeInterruptions() {
         let center = NotificationCenter.default
         observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification,
                                             object: nil, queue: .main) { [weak self] note in
             guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
-            Task { @MainActor in self?.resume() }
+            MainActor.assumeIsolated { self?.resume() }
         })
         observers.append(center.addObserver(forName: .AVAudioEngineConfigurationChange,
                                             object: engine, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.resume() }
+            MainActor.assumeIsolated { self?.resume() }
         })
         observers.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification,
                                             object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.resume() }
+            MainActor.assumeIsolated { self?.resume() }
         })
     }
 

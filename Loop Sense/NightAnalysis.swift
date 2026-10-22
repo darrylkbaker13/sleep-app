@@ -1,6 +1,6 @@
 import Foundation
 
-struct LoudEvent: Identifiable {
+nonisolated struct LoudEvent: Identifiable {
     let id = UUID()
     let start: Date
     let duration: TimeInterval
@@ -9,21 +9,21 @@ struct LoudEvent: Identifiable {
     let audioOffset: TimeInterval
 }
 
-struct ChartPoint: Identifiable {
+nonisolated struct ChartPoint: Identifiable {
     var id: Date { time }
     let time: Date
     let average: Double
     let peak: Double
 }
 
-struct HourSummary: Identifiable {
+nonisolated struct HourSummary: Identifiable {
     var id: Date { hour }
     let hour: Date
     let average: Double
     let events: Int
 }
 
-struct LevelBand: Identifiable {
+nonisolated struct LevelBand: Identifiable {
     var id: String { label }
     let label: String
     let range: String
@@ -33,12 +33,12 @@ struct LevelBand: Identifiable {
 
 /// Reference values from the WHO Guidelines for Community Noise: bedroom average under 30 dB,
 /// and individual noises above 45 dB no more than 10–15 times a night.
-enum WHO {
+nonisolated enum WHO {
     static let averageLimit = 30.0
     static let peakLimit = 45.0
 }
 
-struct NightAnalysis {
+nonisolated struct NightAnalysis {
     let start: Date
     let end: Date
     let recordedSeconds: Int
@@ -192,7 +192,7 @@ struct NightAnalysis {
     }
 }
 
-enum CSVExporter {
+nonisolated enum CSVExporter {
     static func write(_ session: SleepSession) throws -> URL {
         let iso = ISO8601DateFormatter()
         var csv = "seconds_from_start,timestamp,db_spl\n"
