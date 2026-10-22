@@ -6,7 +6,7 @@ Part of **I2 · Name the noise**. Question: is Apple's built-in sound classifier
 
 ## How to run it
 
-**On the iPhone (Debug builds only):** open any night that has saved audio, scroll to the bottom and tap **Run sound classifier** on the *Name the noises (debug)* card. Use **Share results** to send the text.
+**On the iPhone (Debug builds only):** open any night that has saved audio, scroll down, open **More detail** and tap **Run sound classifier** on the *Name the noises (debug)* card. Use **Share results** to send the text.
 
 **On a Mac:** copy a night's `<id>.json` and `<id>.caf` from the app's `Documents/Sessions` folder (Xcode › Devices and Simulators › Loop Sense › Download Container), then:
 

@@ -44,6 +44,8 @@ nonisolated struct EarplugRecommendation {
     /// nil when the room already met the WHO targets.
     let model: LoopModel?
     let reason: String
+    /// One short line for the report, e.g. "Needs about 25 dB less to reach WHO levels".
+    let summary: String
 
     init(average: Double, peak: Double, models: [LoopModel] = LoopModel.all) {
         let forAverage = average - WHO.averageLimit
@@ -59,6 +61,9 @@ nonisolated struct EarplugRecommendation {
             .filter { $0.goodForSleep && !$0.kidsOnly }
             .sorted { $0.snr.upperBound < $1.snr.upperBound }
 
+        summary = needed <= 0
+            ? "Your room met WHO bedroom levels"
+            : "Needs about \(Int(needed)) dB less to reach WHO levels"
         if needed <= 0 {
             model = nil
             reason = "Your room met the WHO's bedroom guidelines, so earplugs aren't essential. If you're a light sleeper, Loop Dream is designed for sleep."

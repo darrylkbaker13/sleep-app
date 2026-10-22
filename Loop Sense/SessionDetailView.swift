@@ -7,18 +7,33 @@ struct SessionDetailView: View {
     let session: SleepSession
     @EnvironmentObject private var store: SessionStore
     @EnvironmentObject private var recorder: NightRecorder
+    @Environment(\.dynamicTypeSize) private var typeSize
     @StateObject private var player = ClipPlayer()
     @State private var analysis: NightAnalysis?
     @State private var loaded = false
     @State private var csvURL: URL?
+    @State private var editingCheckIn = false
+    @State private var showingAbout = false
+    @State private var moreDetailOpen = false
+
+    /// The latest saved copy, so check-in edits show straight away.
+    private var current: SleepSession {
+        store.sessions.first { $0.id == session.id } ?? session
+    }
 
     var body: some View {
         Group {
             if let analysis {
                 report(analysis)
             } else if loaded {
-                ContentUnavailableView("Not enough data", systemImage: "waveform.slash",
-                                       description: Text("This recording is shorter than a minute."))
+                ScrollView {
+                    VStack(spacing: 20) {
+                        ContentUnavailableView("Not enough data", systemImage: "waveform.slash",
+                                               description: Text("This recording is shorter than a minute."))
+                        SleepNotesCard(session: current) { editingCheckIn = true }
+                    }
+                    .padding()
+                }
             } else {
                 ProgressView("Analyzing…")
             }
@@ -32,16 +47,10 @@ struct SessionDetailView: View {
                     .font(.loop(.headline))
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    if let csvURL {
-                        ShareLink("Export levels (CSV)", item: csvURL)
-                    }
-                    if let audio = store.audioURL(for: session) {
-                        ShareLink("Export audio", item: audio)
-                    }
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
+                Button { showingAbout = true } label: {
+                    Image(systemName: "info.circle")
                 }
+                .accessibilityLabel("About these readings")
             }
         }
         .task {
@@ -54,65 +63,74 @@ struct SessionDetailView: View {
             loaded = true
         }
         .onDisappear { player.stop() }
+        .sheet(isPresented: $editingCheckIn) {
+            CheckInView(session: current) { updated in
+                if let updated { store.save(updated) }
+                editingCheckIn = false
+            }
+        }
+        .sheet(isPresented: $showingAbout) { AboutReadingsSheet() }
     }
 
     @ViewBuilder
     private func report(_ a: NightAnalysis) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Headline
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(a.verdict).font(.loop(.title2))
-                    Text("\(a.start.formatted(date: .omitted, time: .shortened)) – \(a.end.formatted(date: .omitted, time: .shortened)) · \(formatDuration(a.end.timeIntervalSince(a.start)))")
-                        .foregroundStyle(.secondary)
-                }
+        let byLoudness = a.events.sorted { $0.peak > $1.peak }
+        ScrollViewReader { scroller in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Above the fold: the answer, the numbers and the night at a glance.
+                    ReportHeadline(
+                        title: a.headline, tone: a.verdictTone, subline: a.subline,
+                        caption: "\(a.start.formatted(date: .omitted, time: .shortened)) – \(a.end.formatted(date: .omitted, time: .shortened)) · \(formatDuration(a.end.timeIntervalSince(a.start)))",
+                        chips: a.chips)
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    StatTile(title: "Average", value: a.average, caption: "WHO target ≤ 30")
-                    StatTile(title: "Background", value: a.background, caption: "steady noise floor")
-                    StatTile(title: "Loudest", value: a.peak, caption: a.peakTime.formatted(date: .omitted, time: .shortened))
-                    StatTile(title: "Noise events", count: a.events.count, caption: "\(a.eventsOverWHOPeak) above 45 dB")
-                }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8),
+                                             count: typeSize.isAccessibilitySize ? 2 : 4),
+                              spacing: 8) {
+                        StatTile(title: "Average", value: a.average, caption: "WHO ≤ 30")
+                        StatTile(title: "Background", value: a.background, caption: "fans, traffic")
+                        StatTile(title: "Loudest", value: a.peak, caption: a.peakTime.formatted(date: .omitted, time: .shortened))
+                        StatTile(title: "Noises", count: a.events.count, caption: "\(a.eventsOverWHOPeak) over 45")
+                    }
 
-                Card("Through the night") {
-                    Chart {
-                        ForEach(a.chart) { p in
-                            AreaMark(x: .value("Time", p.time), yStart: .value("Avg", p.average), yEnd: .value("Peak", p.peak))
-                                .foregroundStyle(Color.loopRoseGold.opacity(0.3))
-                            LineMark(x: .value("Time", p.time), y: .value("Average", p.average))
-                                .foregroundStyle(Color.loopAccent)
-                                .lineStyle(StrokeStyle(lineWidth: 1.5))
-                        }
-                        RuleMark(y: .value("WHO", WHO.averageLimit))
-                            .foregroundStyle(Color.loopSilver.opacity(0.7))
-                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                            .annotation(position: .top, alignment: .leading) {
-                                Text("WHO 30 dB").font(.loop(.caption2)).foregroundStyle(Color.loopSilver)
+                    NightChartCard(session: session, analysis: a)
+
+                    if !byLoudness.isEmpty {
+                        Card("Loudest moments") {
+                            ForEach(byLoudness.prefix(3)) { event in
+                                eventRow(event)
+                                if event.id != byLoudness.prefix(3).last?.id { Divider() }
                             }
-                    }
-                    .chartYAxisLabel("dB")
-                    .chartXScale(domain: a.start...a.end)
-                    .frame(height: 220)
-                    HStack(spacing: 16) {
-                        Legend(color: .loopAccent, label: "Minute average")
-                        Legend(color: .loopRoseGold.opacity(0.6), label: "Minute peak")
-                    }
-                    .font(.loop(.caption))
-                }
-
-                SleepStagesCard(session: session, analysis: a)
-
-                Card("What this means") {
-                    ForEach(a.findings, id: \.self) { line in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("•")
-                            Text(line)
+                            if byLoudness.count > 3 {
+                                Button("See all \(byLoudness.count)") {
+                                    withAnimation { moreDetailOpen = true }
+                                    // Wait for the list to appear before scrolling to it.
+                                    Task {
+                                        try? await Task.sleep(for: .milliseconds(350))
+                                        withAnimation { scroller.scrollTo("allNoises", anchor: .top) }
+                                    }
+                                }
+                                .font(.loop(.subheadline))
+                                .foregroundStyle(Color.loopAccent)
+                            }
                         }
                     }
+
+                    SleepNotesCard(session: current) { editingCheckIn = true }
+
+                    EarplugCard(recommendation: EarplugRecommendation(average: a.average, peak: a.peak))
+
+                    moreDetail(a, byLoudness: byLoudness)
                 }
+                .padding()
+            }
+        }
+    }
 
-                EarplugCard(recommendation: EarplugRecommendation(average: a.average, peak: a.peak))
-
+    /// Everything that isn't needed to answer "how was my night?".
+    private func moreDetail(_ a: NightAnalysis, byLoudness: [LoudEvent]) -> some View {
+        DisclosureGroup(isExpanded: $moreDetailOpen) {
+            VStack(alignment: .leading, spacing: 16) {
                 Card("Time at each level") {
                     ForEach(a.bands) { band in
                         VStack(alignment: .leading, spacing: 4) {
@@ -141,21 +159,28 @@ struct SessionDetailView: View {
                     }
                 }
 
-                if !a.events.isEmpty {
-                    Card("Loudest moments") {
-                        Text("Noises at least \(Int(a.eventThreshold.rounded())) dB (10 dB above background).")
+                if !byLoudness.isEmpty {
+                    Card("All noises") {
+                        Text("At least \(Int(a.eventThreshold.rounded())) dB, 10 dB over background.")
                             .font(.loop(.caption))
                             .foregroundStyle(.secondary)
-                        ForEach(a.events.sorted { $0.peak > $1.peak }.prefix(25)) { event in
+                        ForEach(byLoudness) { event in
                             eventRow(event)
                             Divider()
                         }
                     }
+                    .id("allNoises")
                 }
 
-                Text("Readings are approximate and unweighted. Phone microphones aren't calibrated sound meters, so treat the numbers as a guide and compare nights with each other.")
-                    .font(.loop(.footnote))
-                    .foregroundStyle(.secondary)
+                Card("Export") {
+                    if let csvURL {
+                        ShareLink("Levels (CSV)", item: csvURL)
+                    }
+                    if let audio = store.audioURL(for: session) {
+                        ShareLink("Audio recording", item: audio)
+                    }
+                }
+                .foregroundStyle(Color.loopAccent)
 
                 #if DEBUG
                 if let audio = store.audioURL(for: session) {
@@ -163,8 +188,11 @@ struct SessionDetailView: View {
                 }
                 #endif
             }
-            .padding()
+            .padding(.top, 12)
+        } label: {
+            Text("More detail").font(.loop(.headline))
         }
+        .tint(Color.loopAccent)
     }
 
     private func eventRow(_ event: LoudEvent) -> some View {
@@ -191,8 +219,37 @@ struct SessionDetailView: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(recorder.isRecording)
+                .accessibilityLabel(player.playingID == event.id ? "Stop" : "Play this noise")
             }
         }
+    }
+}
+
+/// The disclaimer, now behind the ⓘ button.
+private struct AboutReadingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("About these readings").font(.loop(.title3))
+                    Text("Readings are approximate and unweighted. Phone microphones aren't calibrated sound meters, so treat the numbers as a guide and compare nights with each other.")
+                    Text("The WHO recommends a bedroom average of 30 dB or less, and no more than 10–15 noises above 45 dB a night.")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+            }
+            .loopBackground()
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationBackground(Color.loopMidnight)
     }
 }
 
@@ -203,20 +260,24 @@ private struct StatTile: View {
     let caption: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.loop(.caption)).foregroundStyle(.secondary)
-            if let value {
-                Text("\(Int(value.rounded())) dB")
-                    .font(.loop(.title)).monospacedDigit()
-                    .foregroundStyle(levelColor(value))
-            } else if let count {
-                Text("\(count)").font(.loop(.title)).monospacedDigit()
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.loop(.caption2)).foregroundStyle(.secondary)
+            Group {
+                if let value {
+                    Text("\(Int(value.rounded())) dB").foregroundStyle(levelColor(value))
+                } else if let count {
+                    Text("\(count)")
+                }
             }
+            .font(.loop(.title3)).monospacedDigit()
+            .minimumScaleFactor(0.8)
             Text(caption).font(.loop(.caption2)).foregroundStyle(.secondary)
         }
+        .lineLimit(1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(10)
         .background(Color.loopSurface, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -255,8 +316,15 @@ private struct EarplugCard: View {
                 }
                 Text(model.note).font(.loop(.subheadline)).foregroundStyle(.secondary)
             }
-            Text(recommendation.reason)
-            Text("A guide only. SNR is a lab rating; real-world reduction is usually lower and depends on fit.")
+            Text(recommendation.summary)
+            DisclosureGroup("Why this one") {
+                Text(recommendation.reason)
+                    .font(.loop(.subheadline))
+                    .padding(.top, 4)
+            }
+            .font(.loop(.subheadline))
+            .tint(Color.loopAccent)
+            Text("A guide: real-world reduction is lower than SNR.")
                 .font(.loop(.caption))
                 .foregroundStyle(.secondary)
             Link(destination: LoopModel.siteURL) {
@@ -330,17 +398,6 @@ private struct ClassifierSpikeCard: View {
     }
 }
 #endif
-
-private struct Legend: View {
-    let color: Color
-    let label: String
-    var body: some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(label).foregroundStyle(.secondary)
-        }
-    }
-}
 
 @MainActor
 final class ClipPlayer: ObservableObject {

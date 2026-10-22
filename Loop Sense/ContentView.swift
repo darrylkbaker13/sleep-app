@@ -5,6 +5,8 @@ struct ContentView: View {
     @EnvironmentObject private var recorder: NightRecorder
     @AppStorage("calibrationOffset") private var calibrationOffset = 95.0
     @AppStorage("saveAudio") private var saveAudio = true
+    /// The night just recorded, shown in the morning check-in.
+    @State private var checkInSession: SleepSession?
     #if DEBUG
     @State private var addingDemo = false
     #endif
@@ -94,6 +96,18 @@ struct ContentView: View {
                 #endif
             }
             .loopBackground()
+            .onChange(of: recorder.activeSessionID) { finished, current in
+                // A recording just stopped: ask how the night went.
+                if let finished, current == nil {
+                    checkInSession = store.sessions.first { $0.id == finished }
+                }
+            }
+            .sheet(item: $checkInSession) { session in
+                CheckInView(session: session) { updated in
+                    if let updated { store.save(updated) }
+                    checkInSession = nil
+                }
+            }
             .navigationTitle("Loop Sense")
             .toolbar(.hidden, for: .navigationBar)
             .alert("Recording problem", isPresented: Binding(
@@ -112,6 +126,7 @@ private struct RecordPanel: View {
     @EnvironmentObject private var recorder: NightRecorder
     let calibrationOffset: Double
     let saveAudio: Bool
+    @State private var bedtimeWarnings: [String] = []
 
     var body: some View {
         VStack(spacing: 16) {
@@ -142,7 +157,8 @@ private struct RecordPanel: View {
                 if recorder.isRecording {
                     recorder.stop()
                 } else {
-                    Task { await recorder.start(calibrationOffset: calibrationOffset, saveAudio: saveAudio) }
+                    let warnings = BedtimeChecks.current().warnings
+                    if warnings.isEmpty { startRecording() } else { bedtimeWarnings = warnings }
                 }
             } label: {
                 Label(recorder.isRecording ? "Stop & analyze" : "Start sleep recording",
@@ -156,6 +172,19 @@ private struct RecordPanel: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
+        .alert("Before you sleep", isPresented: Binding(
+            get: { !bedtimeWarnings.isEmpty },
+            set: { if !$0 { bedtimeWarnings = [] } }
+        )) {
+            Button("Start anyway") { startRecording() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(bedtimeWarnings.joined(separator: "\n\n"))
+        }
+    }
+
+    private func startRecording() {
+        Task { await recorder.start(calibrationOffset: calibrationOffset, saveAudio: saveAudio) }
     }
 }
 
@@ -182,7 +211,7 @@ private struct SessionRow: View {
     }
 }
 
-func formatDuration(_ seconds: TimeInterval) -> String {
+nonisolated func formatDuration(_ seconds: TimeInterval) -> String {
     let f = DateComponentsFormatter()
     f.allowedUnits = seconds >= 3600 ? [.hour, .minute] : [.minute, .second]
     f.unitsStyle = .abbreviated

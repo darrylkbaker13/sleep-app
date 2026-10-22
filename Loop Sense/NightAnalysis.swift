@@ -56,7 +56,14 @@ nonisolated struct NightAnalysis {
     let chart: [ChartPoint]
     let hours: [HourSummary]
     let verdict: String
-    let findings: [String]
+    /// Green for quiet nights, amber for moderately noisy, red for noisy.
+    let verdictTone: ReportChip.Tone
+    /// "Quiet night · 31 dB average"
+    let headline: String
+    /// One supporting line, e.g. "18 noises · noisiest around 05:00".
+    let subline: String
+    /// Two or three at-a-glance facts; each carries the full explanation for its detail sheet.
+    let chips: [ReportChip]
 
     init?(session: SleepSession) {
         let offset = session.calibrationOffset
@@ -153,42 +160,58 @@ nonisolated struct NightAnalysis {
 
         let timeFmt = Date.FormatStyle(date: .omitted, time: .shortened)
         let hoursRecorded = Double(readings.count) / 3600
-        var findings: [String] = []
+        let loudHour = hours.count >= 2 ? hours.max(by: { $0.average < $1.average }) : nil
+        let quietHour = hours.count >= 2 ? hours.min(by: { $0.average < $1.average }) : nil
 
-        let avgComparison = average <= WHO.averageLimit
-            ? "within the WHO's recommended 30 dB for bedrooms"
-            : String(format: "%.0f dB above the WHO's recommended 30 dB for bedrooms", average - WHO.averageLimit)
-        findings.append(String(format: "Your room averaged %.0f dB over %.1f hours, %@.", average, hoursRecorded, avgComparison))
-
-        findings.append(String(format: "The steady background noise (the level it rarely dropped below) was %.0f dB. That's your room's baseline: fans, air conditioning, distant traffic.", background))
-
+        switch average {
+        case ..<35: verdictTone = .good
+        case ..<45: verdictTone = .warning
+        default: verdictTone = .bad
+        }
+        headline = "\(verdict) · \(Int(average.rounded())) dB average"
         if events.isEmpty {
-            findings.append("There were no distinct noise spikes. The night was steady throughout.")
+            subline = "Steady all night, no noise spikes"
+        } else if let loudHour {
+            subline = "\(events.count) noise\(events.count == 1 ? "" : "s") · noisiest around \(loudHour.hour.formatted(timeFmt))"
         } else {
-            let perHour = Double(events.count) / max(hoursRecorded, 0.1)
-            findings.append(String(format: "%d noise events rose 10 dB or more above the background (about %.1f per hour). The loudest hit %.0f dB at %@.",
-                                   events.count, perHour, peak, peakTime.formatted(timeFmt)))
+            subline = "\(events.count) noise\(events.count == 1 ? "" : "s") · loudest at \(peakTime.formatted(timeFmt))"
         }
 
+        var chips: [ReportChip] = []
+        let averageDetail = String(format: "Your room averaged %.0f dB over %.1f hours. The WHO recommends 30 dB or less in bedrooms.",
+                                   average, hoursRecorded)
+        if average <= WHO.averageLimit {
+            chips.append(ReportChip(icon: "checkmark.circle.fill", text: "Within WHO guideline", tone: .good, detail: averageDetail))
+        } else {
+            chips.append(ReportChip(icon: "exclamationmark.triangle.fill",
+                                    text: "\(Int((average - WHO.averageLimit).rounded())) dB over WHO guideline",
+                                    tone: .warning, detail: averageDetail))
+        }
+
+        let peakDetail = "The WHO suggests no more than 10–15 noises above 45 dB a night, because sounds this loud are likely to cause brief awakenings."
+            + (events.isEmpty ? "" : String(format: " %d noises rose 10 dB or more above the background (about %.1f per hour); the loudest hit %.0f dB at %@.",
+                                             events.count, Double(events.count) / max(hoursRecorded, 0.1), peak, peakTime.formatted(timeFmt)))
         if eventsOverWHOPeak > 15 {
-            findings.append("\(eventsOverWHOPeak) events peaked above 45 dB. The WHO suggests keeping that to about 10–15 per night, because sounds this loud are likely to cause brief awakenings.")
+            chips.append(ReportChip(icon: "exclamationmark.triangle.fill", text: "\(eventsOverWHOPeak) events over 45 dB",
+                                    tone: .warning, detail: peakDetail))
         } else if eventsOverWHOPeak > 0 {
-            findings.append("\(eventsOverWHOPeak) events peaked above 45 dB, within the WHO's guideline of no more than 10–15 per night.")
-        }
-
-        if hours.count >= 2,
-           let loudHour = hours.max(by: { $0.average < $1.average }),
-           let quietHour = hours.min(by: { $0.average < $1.average }) {
-            let hourFmt = Date.FormatStyle(date: .omitted, time: .shortened)
-            findings.append(String(format: "The noisiest hour started at %@ (%.0f dB average). The quietest started at %@ (%.0f dB).",
-                                   loudHour.hour.formatted(hourFmt), loudHour.average,
-                                   quietHour.hour.formatted(hourFmt), quietHour.average))
+            chips.append(ReportChip(icon: "checkmark.circle.fill", text: "\(eventsOverWHOPeak) over 45 dB, within WHO",
+                                    tone: .good, detail: peakDetail))
+        } else {
+            chips.append(ReportChip(icon: "checkmark.circle.fill", text: "No noises over 45 dB", tone: .good, detail: peakDetail))
         }
 
         if missingSeconds > 60 {
-            findings.append(String(format: "Recording was paused for %.0f minutes in total, probably by a call or alarm.", Double(missingSeconds) / 60))
+            chips.append(ReportChip(icon: "pause.circle.fill", text: "Paused \(Int((Double(missingSeconds) / 60).rounded())) min",
+                                    tone: .neutral,
+                                    detail: "Recording was paused for \(formatDuration(Double(missingSeconds))) in total, probably by a call or alarm. Those minutes aren't in the averages."))
+        } else if let loudHour, let quietHour {
+            chips.append(ReportChip(icon: "moon.fill", text: "Noisiest at \(loudHour.hour.formatted(timeFmt))", tone: .neutral,
+                                    detail: String(format: "The noisiest hour started at %@ (%.0f dB average). The quietest started at %@ (%.0f dB).",
+                                                   loudHour.hour.formatted(timeFmt), loudHour.average,
+                                                   quietHour.hour.formatted(timeFmt), quietHour.average)))
         }
-        self.findings = findings
+        self.chips = chips
     }
 }
 
