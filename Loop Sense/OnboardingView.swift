@@ -47,8 +47,8 @@ struct OnboardingView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color.loopGold)
-                .foregroundStyle(Color.loopMidnight)
+                .tint(Color.loopAccent)
+                .foregroundStyle(Color.loopOnAccent)
                 .controlSize(.large)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 16)
@@ -65,7 +65,7 @@ private struct PageDots: View {
         HStack(spacing: 8) {
             ForEach(0..<count, id: \.self) { i in
                 Capsule()
-                    .fill(i == current ? Color.loopGold : Color.loopSilver.opacity(0.3))
+                    .fill(i == current ? Color.loopAccent : Color.loopSilver.opacity(0.3))
                     .frame(width: i == current ? 20 : 8, height: 8)
             }
         }
@@ -87,11 +87,11 @@ private struct OnboardingPage<Extra: View>: View {
             VStack(spacing: 20) {
                 Image(systemName: icon)
                     .font(.system(size: 64))
-                    .foregroundStyle(Color.loopGold)
+                    .foregroundStyle(Color.loopAccent)
                     .frame(height: 90)
                     .padding(.top, 40)
                 Text(title)
-                    .font(.system(.title, design: .rounded).weight(.semibold))
+                    .font(.loop(.title))
                     .multilineTextAlignment(.center)
                 Text(message)
                     .foregroundStyle(Color.loopSilver)
@@ -137,12 +137,12 @@ private struct MicrophonePage: View {
             switch permission {
             case .granted:
                 Label("Microphone allowed", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(Color.loopGold)
+                    .foregroundStyle(Color.loopAccent)
                     .padding(.top, 8)
             case .denied:
                 VStack(spacing: 10) {
                     Text("Microphone access is off. Turn it on in Settings to record.")
-                        .font(.footnote)
+                        .font(.loop(.footnote))
                         .foregroundStyle(Color.loopCoral)
                         .multilineTextAlignment(.center)
                     Button("Open Settings") {
@@ -192,7 +192,7 @@ private struct HealthPage: View {
             VStack(spacing: 10) {
                 if healthConnected {
                     Label("Apple Health connected", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(Color.loopGold)
+                        .foregroundStyle(Color.loopAccent)
                 } else if HealthSleep.isAvailable {
                     Button("Connect Apple Health") {
                         Task {
@@ -207,15 +207,15 @@ private struct HealthPage: View {
                     }
                     .buttonStyle(.bordered)
                     Text("You can also do this later from any night's report.")
-                        .font(.footnote)
+                        .font(.loop(.footnote))
                         .foregroundStyle(.secondary)
                 } else {
                     Text("Apple Health isn't available on this device.")
-                        .font(.footnote)
+                        .font(.loop(.footnote))
                         .foregroundStyle(.secondary)
                 }
                 if let errorText {
-                    Text(errorText).font(.caption).foregroundStyle(Color.loopRed)
+                    Text(errorText).font(.loop(.caption)).foregroundStyle(Color.loopRed)
                 }
             }
             .multilineTextAlignment(.center)
@@ -231,7 +231,7 @@ private struct Bullet: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: icon)
-                .foregroundStyle(Color.loopGold)
+                .foregroundStyle(Color.loopAccent)
                 .frame(width: 24)
             Text(text)
                 .foregroundStyle(.primary)

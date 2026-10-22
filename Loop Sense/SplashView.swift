@@ -19,10 +19,10 @@ struct SplashView: View {
                 } else {
                     Image(systemName: "moon.zzz.fill")
                         .font(.system(size: 72))
-                        .foregroundStyle(Color.loopGold)
+                        .foregroundStyle(Color.loopAccent)
                     Text("Loop Sense")
-                        .font(.system(size: 34, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color.loopGold)
+                        .font(.loop(size: 34, relativeTo: .largeTitle))
+                        .foregroundStyle(Color.loopAccent)
                 }
                 ProgressView()
                     .tint(Color.loopSilver)

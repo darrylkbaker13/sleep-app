@@ -20,7 +20,7 @@ enum SleepStage: Int, CaseIterable {
         case .awake: return .loopRed
         case .rem: return .loopRoseGold
         case .light: return .loopSilver
-        case .deep: return .loopGold
+        case .deep: return .loopAccent
         }
     }
 }
@@ -180,10 +180,10 @@ struct SleepStagesCard: View {
                     Task { await load(requestAccess: true) }
                 }
                 .buttonStyle(.borderedProminent)
-                .foregroundStyle(Color.loopMidnight)
+                .foregroundStyle(Color.loopOnAccent)
             }
             if let errorText {
-                Text(errorText).font(.caption).foregroundStyle(Color.loopRed)
+                Text(errorText).font(.loop(.caption)).foregroundStyle(Color.loopRed)
             }
         }
         .task {
@@ -210,7 +210,7 @@ struct SleepStagesCard: View {
             .chartYScale(domain: SleepStage.allCases.map(\.label))
             .frame(height: 150)
             Text("Dashed red lines are noise events.")
-                .font(.caption)
+                .font(.loop(.caption))
                 .foregroundStyle(.secondary)
         }
     }
