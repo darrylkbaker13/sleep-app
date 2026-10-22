@@ -73,6 +73,8 @@ final class NightRecorder: ObservableObject {
     @Published private(set) var currentLevel: Float = -120
     @Published private(set) var startDate: Date?
     @Published private(set) var activeSessionID: UUID?
+    /// When the recording will stop on its own, if a morning stop time is set.
+    @Published private(set) var stopDate: Date?
     @Published var errorMessage: String?
 
     private let store: SessionStore
@@ -88,7 +90,7 @@ final class NightRecorder: ObservableObject {
         self.store = store
     }
 
-    func start(calibrationOffset: Double, saveAudio: Bool) async {
+    func start(calibrationOffset: Double, saveAudio: Bool, stopAt: Date? = nil) async {
         guard !isRecording else { return }
         guard await AVAudioApplication.requestRecordPermission() else {
             errorMessage = "Microphone access is off. Enable it in Settings › Privacy & Security › Microphone."
@@ -127,6 +129,7 @@ final class NightRecorder: ObservableObject {
             store.save(newSession)
             activeSessionID = newSession.id
             startDate = now
+            stopDate = stopAt
             lastSave = now
             isRecording = true
             observeInterruptions()
@@ -160,11 +163,17 @@ final class NightRecorder: ObservableObject {
         session = nil
         activeSessionID = nil
         startDate = nil
+        stopDate = nil
         isRecording = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     private func tick() {
+        // The app keeps running in the background while recording, so this also fires with the phone locked.
+        if let stopDate, Date() >= stopDate {
+            stop()
+            return
+        }
         let snap = accumulator.snapshot()
         currentLevel = snap.latest
         // Persist every minute so a crash or a dead battery doesn't lose the night.
