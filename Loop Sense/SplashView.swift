@@ -21,7 +21,7 @@ struct SplashView: View {
                         .font(.system(size: 72))
                         .foregroundStyle(Color.loopAccent)
                     Text("Loop Sense")
-                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .font(.loop(size: 34, relativeTo: .largeTitle))
                         .foregroundStyle(Color.loopAccent)
                 }
                 ProgressView()

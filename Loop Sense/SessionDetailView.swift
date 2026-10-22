@@ -27,6 +27,10 @@ struct SessionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .loopBackground()
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(session.start.formatted(.dateTime.month().day()))
+                    .font(.loop(.headline))
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if let csvURL {
@@ -58,7 +62,7 @@ struct SessionDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 // Headline
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(a.verdict).font(.title2.bold())
+                    Text(a.verdict).font(.loop(.title2))
                     Text("\(a.start.formatted(date: .omitted, time: .shortened)) – \(a.end.formatted(date: .omitted, time: .shortened)) · \(formatDuration(a.end.timeIntervalSince(a.start)))")
                         .foregroundStyle(.secondary)
                 }
@@ -83,7 +87,7 @@ struct SessionDetailView: View {
                             .foregroundStyle(Color.loopSilver.opacity(0.7))
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                             .annotation(position: .top, alignment: .leading) {
-                                Text("WHO 30 dB").font(.caption2).foregroundStyle(Color.loopSilver)
+                                Text("WHO 30 dB").font(.loop(.caption2)).foregroundStyle(Color.loopSilver)
                             }
                     }
                     .chartYAxisLabel("dB")
@@ -93,7 +97,7 @@ struct SessionDetailView: View {
                         Legend(color: .loopAccent, label: "Minute average")
                         Legend(color: .loopRoseGold.opacity(0.6), label: "Minute peak")
                     }
-                    .font(.caption)
+                    .font(.loop(.caption))
                 }
 
                 SleepStagesCard(session: session, analysis: a)
@@ -117,7 +121,7 @@ struct SessionDetailView: View {
                                 Text(band.fraction, format: .percent.precision(.fractionLength(0)))
                                     .monospacedDigit()
                             }
-                            .font(.subheadline)
+                            .font(.loop(.subheadline))
                             ProgressView(value: band.fraction)
                                 .tint(levelColor(band.lowerBound))
                         }
@@ -138,7 +142,7 @@ struct SessionDetailView: View {
                 if !a.events.isEmpty {
                     Card("Loudest moments") {
                         Text("Noises at least \(Int(a.eventThreshold.rounded())) dB (10 dB above background).")
-                            .font(.caption)
+                            .font(.loop(.caption))
                             .foregroundStyle(.secondary)
                         ForEach(a.events.sorted { $0.peak > $1.peak }.prefix(25)) { event in
                             eventRow(event)
@@ -148,7 +152,7 @@ struct SessionDetailView: View {
                 }
 
                 Text("Readings are approximate and unweighted. Phone microphones aren't calibrated sound meters, so treat the numbers as a guide and compare nights with each other.")
-                    .font(.footnote)
+                    .font(.loop(.footnote))
                     .foregroundStyle(.secondary)
             }
             .padding()
@@ -159,7 +163,7 @@ struct SessionDetailView: View {
         HStack {
             VStack(alignment: .leading) {
                 Text(event.start.formatted(date: .omitted, time: .standard)).monospacedDigit()
-                Text(formatDuration(event.duration)).font(.caption).foregroundStyle(.secondary)
+                Text(formatDuration(event.duration)).font(.loop(.caption)).foregroundStyle(.secondary)
             }
             Spacer()
             Text("\(Int(event.peak.rounded())) dB")
@@ -175,7 +179,7 @@ struct SessionDetailView: View {
                     }
                 } label: {
                     Image(systemName: player.playingID == event.id ? "stop.circle.fill" : "play.circle.fill")
-                        .font(.title2)
+                        .font(.loop(.title2))
                 }
                 .buttonStyle(.borderless)
                 .disabled(recorder.isRecording)
@@ -192,15 +196,15 @@ private struct StatTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(title).font(.loop(.caption)).foregroundStyle(.secondary)
             if let value {
                 Text("\(Int(value.rounded())) dB")
-                    .font(.title.bold()).monospacedDigit()
+                    .font(.loop(.title)).monospacedDigit()
                     .foregroundStyle(levelColor(value))
             } else if let count {
-                Text("\(count)").font(.title.bold()).monospacedDigit()
+                Text("\(count)").font(.loop(.title)).monospacedDigit()
             }
-            Text(caption).font(.caption2).foregroundStyle(.secondary)
+            Text(caption).font(.loop(.caption2)).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
@@ -219,7 +223,7 @@ struct Card<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.headline)
+            Text(title).font(.loop(.headline))
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)

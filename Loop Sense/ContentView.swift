@@ -15,6 +15,14 @@ struct ContentView: View {
             List {
                 Section {
                     RecordPanel(calibrationOffset: calibrationOffset, saveAudio: saveAudio)
+                } header: {
+                    // Drawn here rather than as a navigation title so it can use the brand font.
+                    Text("Loop Sense")
+                        .font(.loop(.largeTitle))
+                        .foregroundStyle(Color.primary)
+                        .textCase(nil)
+                        .accessibilityAddTraits(.isHeader)
+                        .padding(.bottom, 8)
                 }
                 .listRowBackground(Color.loopSurface)
 
@@ -54,7 +62,7 @@ struct ContentView: View {
             }
             .loopBackground()
             .navigationTitle("Loop Sense")
-            .toolbarBackground(Color.loopMidnight, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             .alert("Recording problem", isPresented: Binding(
                 get: { recorder.errorMessage != nil },
                 set: { if !$0 { recorder.errorMessage = nil } }
@@ -76,7 +84,7 @@ private struct RecordPanel: View {
         VStack(spacing: 16) {
             if recorder.isRecording, let start = recorder.startDate {
                 Text("\(Int((Double(recorder.currentLevel) + calibrationOffset).rounded())) dB")
-                    .font(.system(size: 56, weight: .semibold, design: .rounded))
+                    .font(.loop(size: 56, relativeTo: .largeTitle))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .animation(.default, value: recorder.currentLevel)
@@ -84,7 +92,7 @@ private struct RecordPanel: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 Text("You can lock your phone. Recording continues in the background.")
-                    .font(.footnote)
+                    .font(.loop(.footnote))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             } else {
@@ -92,7 +100,7 @@ private struct RecordPanel: View {
                     .font(.system(size: 48))
                     .foregroundStyle(Color.loopAccent)
                 Text("Plug in your phone and place it near your bed, mic uncovered.")
-                    .font(.footnote)
+                    .font(.loop(.footnote))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -125,15 +133,15 @@ private struct SessionRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.start, format: .dateTime.weekday(.wide).month().day())
-                    .font(.headline)
+                    .font(.loop(.headline))
                 Text("\(session.start.formatted(date: .omitted, time: .shortened)) – \(session.effectiveEnd.formatted(date: .omitted, time: .shortened)) · \(formatDuration(session.duration))")
-                    .font(.subheadline)
+                    .font(.loop(.subheadline))
                     .foregroundStyle(.secondary)
             }
             Spacer()
             if let avg = session.quickAverage {
                 Text("\(Int(avg.rounded())) dB")
-                    .font(.headline)
+                    .font(.loop(.headline))
                     .monospacedDigit()
                     .foregroundStyle(levelColor(avg))
             }

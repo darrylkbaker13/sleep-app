@@ -21,6 +21,43 @@ extension Color {
     }
 }
 
+/// Brand typeface. Loop uses Century Gothic; Didact Gothic (SIL Open Font License, bundled in
+/// Fonts/) is a free lookalike. To switch, bundle a licensed font, list it under UIAppFonts in
+/// Loop-Sense-Info.plist and change this name. It has a single weight, so bold styles read regular.
+enum LoopFont {
+    static let name = "DidactGothic-Regular"
+}
+
+extension Font {
+    /// The brand font at a Dynamic Type text style, so it still follows the user's text size.
+    static func loop(_ style: Font.TextStyle) -> Font {
+        .custom(LoopFont.name, size: style.defaultSize, relativeTo: style)
+    }
+
+    static func loop(size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
+        .custom(LoopFont.name, size: size, relativeTo: style)
+    }
+}
+
+private extension Font.TextStyle {
+    /// Point sizes at the default (Large) text size.
+    var defaultSize: CGFloat {
+        switch self {
+        case .largeTitle: 34
+        case .title: 28
+        case .title2: 22
+        case .title3: 20
+        case .headline, .body: 17
+        case .callout: 16
+        case .subheadline: 15
+        case .footnote: 13
+        case .caption: 12
+        case .caption2: 11
+        default: 17
+        }
+    }
+}
+
 /// Quiet nights read as neutral silver, loud ones warm up through Apple Blossom tints to red.
 func levelColor(_ db: Double) -> Color {
     switch db {

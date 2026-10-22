@@ -91,7 +91,7 @@ private struct OnboardingPage<Extra: View>: View {
                     .frame(height: 90)
                     .padding(.top, 40)
                 Text(title)
-                    .font(.system(.title, design: .rounded).weight(.semibold))
+                    .font(.loop(.title))
                     .multilineTextAlignment(.center)
                 Text(message)
                     .foregroundStyle(Color.loopSilver)
@@ -142,7 +142,7 @@ private struct MicrophonePage: View {
             case .denied:
                 VStack(spacing: 10) {
                     Text("Microphone access is off. Turn it on in Settings to record.")
-                        .font(.footnote)
+                        .font(.loop(.footnote))
                         .foregroundStyle(Color.loopCoral)
                         .multilineTextAlignment(.center)
                     Button("Open Settings") {
@@ -207,15 +207,15 @@ private struct HealthPage: View {
                     }
                     .buttonStyle(.bordered)
                     Text("You can also do this later from any night's report.")
-                        .font(.footnote)
+                        .font(.loop(.footnote))
                         .foregroundStyle(.secondary)
                 } else {
                     Text("Apple Health isn't available on this device.")
-                        .font(.footnote)
+                        .font(.loop(.footnote))
                         .foregroundStyle(.secondary)
                 }
                 if let errorText {
-                    Text(errorText).font(.caption).foregroundStyle(Color.loopRed)
+                    Text(errorText).font(.loop(.caption)).foregroundStyle(Color.loopRed)
                 }
             }
             .multilineTextAlignment(.center)
