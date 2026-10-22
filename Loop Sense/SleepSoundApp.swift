@@ -1,0 +1,23 @@
+import SwiftUI
+
+@main
+struct SleepSoundApp: App {
+    @StateObject private var store: SessionStore
+    @StateObject private var recorder: NightRecorder
+
+    init() {
+        let store = SessionStore()
+        _store = StateObject(wrappedValue: store)
+        _recorder = StateObject(wrappedValue: NightRecorder(store: store))
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            RootView()
+                .environmentObject(store)
+                .environmentObject(recorder)
+                .tint(.loopGold)
+                .preferredColorScheme(.dark)
+        }
+    }
+}
