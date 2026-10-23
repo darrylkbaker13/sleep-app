@@ -15,6 +15,8 @@ struct SessionDetailView: View {
     @State private var editingCheckIn = false
     @State private var showingAbout = false
     @State private var moreDetailOpen = false
+    /// Garmin sleep stages, loaded by the night chart and shared with the sleep card.
+    @State private var stages: [SleepInterval]?
 
     /// The latest saved copy, so check-in edits show straight away.
     private var current: SleepSession {
@@ -93,7 +95,7 @@ struct SessionDetailView: View {
                         StatTile(title: "Noises", count: a.events.count, caption: "\(a.eventsOverWHOPeak) over 45")
                     }
 
-                    NightChartCard(session: session, analysis: a)
+                    NightChartCard(session: session, analysis: a, stages: $stages)
 
                     if !byLoudness.isEmpty {
                         Card("Loudest moments") {
@@ -117,6 +119,16 @@ struct SessionDetailView: View {
                     }
 
                     SleepNotesCard(session: current) { editingCheckIn = true }
+
+                    // The chart card shows only the most important sleep insight; the rest live here.
+                    if let stages, !stages.isEmpty {
+                        let more = SleepInsights(intervals: stages, session: session, analysis: a).chips.dropFirst()
+                        if !more.isEmpty {
+                            Card("Your sleep") {
+                                ChipRow(chips: Array(more))
+                            }
+                        }
+                    }
 
                     EarplugCard(recommendation: EarplugRecommendation(average: a.average, peak: a.peak))
 
