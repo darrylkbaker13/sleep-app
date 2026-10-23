@@ -42,10 +42,10 @@ struct HighlightsView: View {
         }
         .presentationBackground(Color.loopMidnight)
         .task {
-            let audio = audio, events = events, background = background, boost = boost
+            let audio = audio, events = events, session = session, background = background, boost = boost
             do {
                 let built = try await Task.detached(priority: .userInitiated) {
-                    try Highlights.build(audio: audio, events: events, background: background, boost: boost)
+                    try Highlights.build(audio: audio, events: events, session: session, background: background, boost: boost)
                 }.value
                 highlights = built
                 if !built.isEmpty { play(0) }

@@ -48,8 +48,9 @@ nonisolated enum Highlights {
 
     /// Reads, classifies and exports just the highlight clips, so it's quick even for a long night.
     /// `background` (dBFS) caps the boost on near-silent clips, as in playback.
-    /// Labels for a night could later come from stored per-event labels (I2c) instead of classifying here.
-    static func build(audio url: URL, events: [LoudEvent], background: Double?, boost: Bool) throws -> [Highlight] {
+    /// Uses the night's stored labels (I2c) where they exist, and only classifies clips that have none.
+    static func build(audio url: URL, events: [LoudEvent], session: SleepSession? = nil,
+                      background: Double?, boost: Bool) throws -> [Highlight] {
         let file = try AVAudioFile(forReading: url)
         let rate = file.processingFormat.sampleRate
         let length = Double(file.length) / rate
@@ -60,9 +61,16 @@ nonisolated enum Highlights {
             file.framePosition = AVAudioFramePosition(range.start * rate)
             try file.read(into: buffer, frameCount: frames)
 
-            let labels = SoundClassifier.topLabels(windows: try SoundClassifier.classify(buffer: buffer),
+            let labels: [SoundClassifier.Label]
+            let category: NoiseCategory
+            if let stored = session?.label(for: event) {
+                labels = stored.label.map { [SoundClassifier.Label(identifier: $0, confidence: stored.confidence)] } ?? []
+                category = stored.noiseCategory
+            } else {
+                labels = SoundClassifier.topLabels(windows: try SoundClassifier.classify(buffer: buffer),
                                                    eventSeconds: event.duration)
-            let category = NoiseCategory.category(for: labels.map { (identifier: $0.identifier, confidence: $0.confidence) })
+                category = NoiseCategory.category(for: labels.map { (identifier: $0.identifier, confidence: $0.confidence) })
+            }
             var highlight = Highlight(event: event, clipStart: range.start, clipDuration: range.duration,
                                       labels: labels, category: category)
             highlight.shareFile = try? export(buffer, for: highlight, background: background, boost: boost)

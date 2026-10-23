@@ -7,6 +7,7 @@ struct SessionDetailView: View {
     let session: SleepSession
     @EnvironmentObject private var store: SessionStore
     @EnvironmentObject private var recorder: NightRecorder
+    @EnvironmentObject private var labeller: EventLabeller
     @Environment(\.dynamicTypeSize) private var typeSize
     @StateObject private var player = ClipPlayer()
     @State private var analysis: NightAnalysis?
@@ -57,6 +58,8 @@ struct SessionDetailView: View {
             }
         }
         .task {
+            // Older nights are labelled the first time they're opened.
+            labeller.labelIfNeeded(current)
             let session = session
             let result = await Task.detached(priority: .userInitiated) {
                 (NightAnalysis(session: session), try? CSVExporter.write(session))
@@ -110,10 +113,12 @@ struct SessionDetailView: View {
                         .controlSize(.large)
                         .disabled(recorder.isRecording)
                         .sheet(isPresented: $showingHighlights, onDismiss: { player.stop() }) {
-                            HighlightsView(session: session, audio: audio, events: a.events,
+                            HighlightsView(session: current, audio: audio, events: a.events,
                                            background: a.background - session.calibrationOffset)
                         }
                     }
+
+                    labellingStatus
 
                     if !byLoudness.isEmpty {
                         Card("Loudest moments") {
@@ -154,6 +159,23 @@ struct SessionDetailView: View {
                 }
                 .padding()
             }
+        }
+    }
+
+    /// Progress while the night's noises are being named, or why they can't be.
+    @ViewBuilder
+    private var labellingStatus: some View {
+        if let p = labeller.progress[session.id] {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Naming last night's noises… \(Int((p * 100).rounded()))%", systemImage: "waveform.badge.magnifyingglass")
+                    .font(.loop(.caption))
+                    .foregroundStyle(.secondary)
+                ProgressView(value: p).tint(Color.loopAccent)
+            }
+        } else if store.audioURL(for: session) == nil, current.eventLabels == nil {
+            Label("Noises show as Unknown: audio wasn't saved for this night.", systemImage: "waveform.slash")
+                .font(.loop(.caption))
+                .foregroundStyle(.secondary)
         }
     }
 
