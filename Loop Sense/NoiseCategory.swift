@@ -51,6 +51,21 @@ nonisolated enum NoiseCategory: String, CaseIterable, Identifiable {
         return labelMap[label] ?? .other
     }
 
+    /// Labels that say little on their own. "water" tops both a running tap and rain, so when one of
+    /// these wins, a more specific label close behind it decides the category.
+    static let vagueLabels: Set<String> = ["water", "click", "thump_thud", "whoosh_swoosh_swish"]
+
+    /// The category for a noise from its top labels, most confident first.
+    static func category(for labels: [(identifier: String, confidence: Double)]) -> NoiseCategory {
+        let trusted = labels.filter { $0.confidence >= confidenceThreshold && $0.identifier != "silence" }
+        guard let top = trusted.first else { return .unknown }
+        if vagueLabels.contains(top.identifier),
+           let specific = trusted.first(where: { !vagueLabels.contains($0.identifier) && labelMap[$0.identifier] != nil }) {
+            return category(for: specific.identifier, confidence: specific.confidence)
+        }
+        return category(for: top.identifier, confidence: top.confidence)
+    }
+
     /// Apple classifier label → category, built from the lists below.
     static let labelMap: [String: NoiseCategory] = {
         var map: [String: NoiseCategory] = [:]
@@ -65,11 +80,14 @@ nonisolated enum NoiseCategory: String, CaseIterable, Identifiable {
 
     /// Labels from SNClassifierIdentifier.version1, grouped. Anything not here is Other.
     static let labels: [NoiseCategory: [String]] = [
-        .snoring: ["snoring", "breathing", "gasp"],
+        .snoring: ["snoring", "breathing", "gasp", "sigh"],
         .speech: [
             "speech", "shout", "yell", "battle_cry", "children_shouting", "screaming", "whispering",
             "laughter", "baby_laughter", "giggling", "snicker", "belly_laugh", "chuckle_chortle",
             "crying_sobbing", "baby_crying", "chatter", "crowd", "babble", "cheering", "applause", "booing",
+            // Other sounds people make: coughs and sneezes are common at night.
+            "cough", "sneeze", "nose_blowing", "hiccup", "burp", "gargling", "slurp", "chewing", "biting",
+            "clapping", "finger_snapping",
         ],
         .traffic: [
             "car_horn", "power_windows", "vehicle_skidding", "car_passing_by", "race_car", "truck", "air_horn",
@@ -97,8 +115,17 @@ nonisolated enum NoiseCategory: String, CaseIterable, Identifiable {
             "mechanical_fan", "air_conditioner", "printer", "clock", "tick", "tick_tock", "keys_jangling",
             "coin_dropping", "zipper", "glass_clink", "glass_breaking", "person_walking", "person_shuffling",
             "person_running", "thump_thud", "hammer", "saw", "power_tool", "drill",
+            // Generic water: in a bedroom this is nearly always plumbing (see vagueLabels for rain).
+            "water", "gurgling", "stream_burbling", "liquid_sloshing", "liquid_squishing", "liquid_spraying",
+            "underwater_bubbling",
+            "fire", "fire_crackle", "typing", "typewriter", "typing_computer_keyboard", "writing", "scissors",
+            "camera", "click", "crumpling_crinkling", "tearing", "crushing", "slap_smack", "whoosh_swoosh_swish",
+            "bell", "chime",
         ],
-        .weather: ["wind", "wind_rustling_leaves", "wind_noise_microphone", "thunderstorm", "thunder", "rain", "raindrop"],
+        .weather: [
+            "wind", "wind_rustling_leaves", "wind_noise_microphone", "thunderstorm", "thunder", "rain", "raindrop",
+            "wind_chime", "waterfall", "ocean", "sea_waves",
+        ],
         .musicTV: [
             "music", "singing", "choir_singing", "yodeling", "rapping", "humming", "whistling",
             "plucked_string_instrument", "guitar", "electric_guitar", "bass_guitar", "acoustic_guitar",
