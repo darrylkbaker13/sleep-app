@@ -78,3 +78,22 @@ extension View {
             .background(Color.loopMidnight.ignoresSafeArea())
     }
 }
+
+extension NoiseCategory {
+    /// Marker colour for this kind of noise on charts and in the event list.
+    var color: Color {
+        switch self {
+        case .snoring: Color(hex: 0xD9A3A5)    // Apple Blossom tint
+        case .speech: Color(hex: 0x8FB8DE)     // soft blue
+        case .traffic: Color(hex: 0xE8664F)    // coral
+        case .aircraft: Color(hex: 0xE8A54F)   // amber
+        case .animals: Color(hex: 0x6CC28A)    // green
+        case .household: Color(hex: 0xBFC3CA)  // silver
+        case .weather: Color(hex: 0x5FB3C9)    // teal
+        case .musicTV: Color(hex: 0xB591D6)    // lavender
+        case .alarmPhone: Color(hex: 0xE0283F) // red
+        case .other: Color(hex: 0x8E8E93)
+        case .unknown: Color(hex: 0x5A5A60)
+        }
+    }
+}
