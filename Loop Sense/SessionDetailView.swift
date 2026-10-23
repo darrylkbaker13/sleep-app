@@ -15,6 +15,7 @@ struct SessionDetailView: View {
     @State private var editingCheckIn = false
     @State private var showingAbout = false
     @State private var moreDetailOpen = false
+    @State private var showingHighlights = false
     /// Garmin sleep stages, loaded by the night chart and shared with the sleep card.
     @State private var stages: [SleepInterval]?
 
@@ -96,6 +97,23 @@ struct SessionDetailView: View {
                     }
 
                     NightChartCard(session: session, analysis: a, stages: $stages)
+
+                    // Highlights need the saved audio; hidden when it was off for this night.
+                    if !byLoudness.isEmpty, let audio = store.audioURL(for: session) {
+                        Button { showingHighlights = true } label: {
+                            Label("Play highlights", systemImage: "play.square.stack.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.loopAccent)
+                        .foregroundStyle(Color.loopOnAccent)
+                        .controlSize(.large)
+                        .disabled(recorder.isRecording)
+                        .sheet(isPresented: $showingHighlights, onDismiss: { player.stop() }) {
+                            HighlightsView(session: session, audio: audio, events: a.events,
+                                           background: a.background - session.calibrationOffset)
+                        }
+                    }
 
                     if !byLoudness.isEmpty {
                         Card("Loudest moments") {
