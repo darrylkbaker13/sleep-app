@@ -75,7 +75,9 @@ final class ClipPlayer: ObservableObject {
     }
 
     /// `background` is the night's background level in dBFS, used to avoid boosting hiss.
-    func play(url: URL, from start: TimeInterval, duration: TimeInterval, id: UUID, background: Double?) {
+    /// `onFinish` runs when the clip plays to the end (not when it's stopped).
+    func play(url: URL, from start: TimeInterval, duration: TimeInterval, id: UUID, background: Double?,
+              onFinish: (() -> Void)? = nil) {
         stop()
         do {
             let file = try AVAudioFile(forReading: url)
@@ -107,7 +109,9 @@ final class ClipPlayer: ObservableObject {
             let seconds = Double(buffer.frameLength) / rate
             stopTask = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(seconds))
-                if !Task.isCancelled { self?.stop() }
+                guard !Task.isCancelled else { return }
+                self?.stop()
+                onFinish?()
             }
         } catch {
             print("Playback failed: \(error)")

@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import SoundAnalysis
 
@@ -60,6 +61,40 @@ nonisolated enum SoundClassifier {
         return Result(audioDuration: audioDuration, processingTime: Date().timeIntervalSince(started),
                       windows: windows, events: results)
     }
+
+    /// Classifies a short clip already in memory, e.g. one highlight. Returns its windows.
+    static func classify(buffer: AVAudioPCMBuffer) throws -> [Window] {
+        let analyzer = SNAudioStreamAnalyzer(format: buffer.format)
+        let request = try SNClassifySoundRequest(classifierIdentifier: .version1)
+        let observer = Observer()
+        try analyzer.add(request, withObserver: observer)
+        analyzer.analyze(buffer, atAudioFramePosition: 0)
+        analyzer.completeAnalysis()   // returns once every result has been delivered
+        if let error = observer.error { throw error }
+        return observer.windows
+    }
+
+    /// The labels for one noise, best first. Short noises use each label's highest score; longer ones
+    /// rank labels by how many windows they win, so a one-off misfire can't outrank the steady sound
+    /// (a spike finding: a 51-second event once scored whale_vocalization 0.81).
+    static func topLabels(windows: [Window], eventSeconds: TimeInterval, count: Int = 3) -> [Label] {
+        var best: [String: Double] = [:]
+        var wins: [String: Int] = [:]
+        for w in windows {
+            let labels = w.labels.filter { $0.identifier != "silence" }
+            for l in labels { best[l.identifier] = max(best[l.identifier] ?? 0, l.confidence) }
+            if let top = labels.max(by: { $0.confidence < $1.confidence }) { wins[top.identifier, default: 0] += 1 }
+        }
+        let byWins = eventSeconds > longEventSeconds
+        let ordered = best.keys.sorted { a, b in
+            if byWins, wins[a, default: 0] != wins[b, default: 0] { return wins[a, default: 0] > wins[b, default: 0] }
+            return best[a]! > best[b]!
+        }
+        return ordered.prefix(count).map { Label(identifier: $0, confidence: best[$0]!) }
+    }
+
+    /// Events longer than this rank labels by windows won rather than peak score.
+    static let longEventSeconds: TimeInterval = 3
 
     /// Plain-text report for sharing or pasting into the spike write-up.
     static func report(_ r: Result, title: String) -> String {
