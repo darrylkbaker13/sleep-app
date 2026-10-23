@@ -5,6 +5,7 @@ struct ContentView: View {
     @EnvironmentObject private var recorder: NightRecorder
     @AppStorage("calibrationOffset") private var calibrationOffset = 95.0
     @AppStorage("saveAudio") private var saveAudio = true
+    @AppStorage(ClipGain.settingKey) private var boostClips = true
     @AppStorage(AutoStop.enabledKey) private var autoStopEnabled = true
     @AppStorage(AutoStop.minutesKey) private var autoStopMinutes = AutoStop.defaultMinutes
     /// The night just recorded, shown in the morning check-in.
@@ -64,6 +65,9 @@ struct ContentView: View {
 
                 Section {
                     Toggle("Save audio recording", isOn: $saveAudio)
+                    if saveAudio {
+                        Toggle("Boost quiet clips", isOn: $boostClips)
+                    }
                     Toggle("Stop automatically", isOn: $autoStopEnabled)
                     if autoStopEnabled {
                         DatePicker("Stop at", selection: Binding(
@@ -78,7 +82,7 @@ struct ContentView: View {
                 } header: {
                     Text("Settings")
                 } footer: {
-                    Text("Saving audio lets you play back loud moments (about 15 MB per hour). With automatic stop on, recording ends at the set time and the report is ready when you wake. The calibration offset converts the microphone's digital level to approximate real-world decibels. To calibrate, compare with a sound meter and adjust until the live readings match. Changes apply to new recordings.")
+                    Text("Saving audio lets you play back loud moments (about 15 MB per hour). Boost makes played-back noises easier to hear; recordings and readings aren't changed. With automatic stop on, recording ends at the set time and the report is ready when you wake. The calibration offset converts the microphone's digital level to approximate real-world decibels. To calibrate, compare with a sound meter and adjust until the live readings match. Changes apply to new recordings.")
                 }
                 .listRowBackground(Color.loopSurface)
                 .disabled(recorder.isRecording)
