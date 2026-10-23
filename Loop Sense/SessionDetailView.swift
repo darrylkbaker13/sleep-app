@@ -17,6 +17,8 @@ struct SessionDetailView: View {
     @State private var showingAbout = false
     @State private var moreDetailOpen = false
     @State private var showingHighlights = false
+    /// Category picked to filter the full noise list; nil shows everything.
+    @State private var noiseFilter: NoiseCategory?
     /// Garmin sleep stages, loaded by the night chart and shared with the sleep card.
     @State private var stages: [SleepInterval]?
 
@@ -99,7 +101,8 @@ struct SessionDetailView: View {
                         StatTile(title: "Noises", count: a.events.count, caption: "\(a.eventsOverWHOPeak) over 45")
                     }
 
-                    NightChartCard(session: session, analysis: a, stages: $stages)
+                    NightChartCard(session: current, analysis: a, stages: $stages,
+                                   hasAudio: store.audioURL(for: session) != nil)
 
                     // Highlights need the saved audio; hidden when it was off for this night.
                     if !byLoudness.isEmpty, let audio = store.audioURL(for: session) {
@@ -216,9 +219,14 @@ struct SessionDetailView: View {
                         Text("At least \(Int(a.eventThreshold.rounded())) dB, 10 dB over background.")
                             .font(.loop(.caption))
                             .foregroundStyle(.secondary)
-                        ForEach(byLoudness) { event in
+                        categoryFilter(byLoudness)
+                        let shown = NoiseLabels.filter(byLoudness, by: noiseFilter, in: current, hasAudio: hasAudio)
+                        ForEach(shown) { event in
                             eventRow(event)
                             Divider()
+                        }
+                        if shown.isEmpty {
+                            Text("No noises in this category.").font(.loop(.caption)).foregroundStyle(.secondary)
                         }
                     }
                     .id("allNoises")
@@ -247,10 +255,81 @@ struct SessionDetailView: View {
         .tint(Color.loopAccent)
     }
 
+    private var hasAudio: Bool { store.audioURL(for: session) != nil }
+
+    /// "All · Snoring 3 · Traffic 2 …": tap to show one kind of noise.
+    @ViewBuilder
+    private func categoryFilter(_ events: [LoudEvent]) -> some View {
+        let counts = NoiseLabels.counts(events, in: current, hasAudio: hasAudio)
+        if counts.count > 1 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    filterChip("All \(events.count)", icon: nil, color: Color.loopAccent, selected: noiseFilter == nil) {
+                        noiseFilter = nil
+                    }
+                    ForEach(counts, id: \.category) { c in
+                        filterChip("\(c.category.name) \(c.count)", icon: c.category.symbol, color: c.category.color,
+                                   selected: noiseFilter == c.category) {
+                            noiseFilter = noiseFilter == c.category ? nil : c.category
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func filterChip(_ text: String, icon: String?, color: Color, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon { Image(systemName: icon) }
+                Text(text).monospacedDigit()
+            }
+            .font(.loop(.caption))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .foregroundStyle(selected ? Color.loopMidnight : color)
+            .background(selected ? color : color.opacity(0.14), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// "02:14 · Traffic" with its icon; tap the category to correct it.
+    @ViewBuilder
+    private func categoryMenu(for event: LoudEvent) -> some View {
+        if let category = NoiseLabels.category(of: event, in: current, hasAudio: hasAudio) {
+            Menu {
+                Section("What was it?") {
+                    ForEach(NoiseLabels.choices) { choice in
+                        Button {
+                            var updated = current
+                            updated.correctLabel(for: event, to: choice)
+                            store.save(updated)
+                        } label: {
+                            if choice == category { Label(choice.name, systemImage: "checkmark") } else { Text(choice.name) }
+                        }
+                    }
+                }
+            } label: {
+                Label(category.name, systemImage: category.symbol)
+                    .foregroundStyle(category.color)
+            }
+            .disabled(!hasAudio)
+            .accessibilityHint(hasAudio ? "Change what this noise was" : "")
+        } else {
+            Label("Naming…", systemImage: "ellipsis")
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func eventRow(_ event: LoudEvent) -> some View {
         HStack {
-            VStack(alignment: .leading) {
-                Text(event.start.formatted(date: .omitted, time: .standard)).monospacedDigit()
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(event.start.formatted(date: .omitted, time: .shortened)).monospacedDigit()
+                    Text("·").foregroundStyle(.secondary)
+                    categoryMenu(for: event)
+                }
                 Text(formatDuration(event.duration)).font(.loop(.caption)).foregroundStyle(.secondary)
             }
             Spacer()

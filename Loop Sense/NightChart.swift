@@ -43,6 +43,8 @@ struct NightChartCard: View {
     let session: SleepSession
     let analysis: NightAnalysis
     @Binding var stages: [SleepInterval]?
+    /// Whether the night's audio was saved, so noises can be named.
+    var hasAudio = true
     @AppStorage("healthConnected") private var healthConnected = false
     @State private var loading = false
     @State private var errorText: String?
@@ -59,6 +61,9 @@ struct NightChartCard: View {
                 .font(.loop(.subheadline))
                 .foregroundStyle(.secondary)
             chart(loud: marks.loud, labelled: marks.labelled)
+            if !categoriesShown(marks.loud).isEmpty {
+                categoryLegend(marks.loud)
+            }
             if hasStages {
                 legend
             }
@@ -117,14 +122,15 @@ struct NightChartCard: View {
                     .lineStyle(StrokeStyle(lineWidth: 1.5))
             }
             ForEach(loud) { e in
+                let color = markColor(e)
                 PointMark(x: .value("Time", e.start), y: .value("Level", e.peak))
                     .symbolSize(26)
-                    .foregroundStyle(levelColor(e.peak))
+                    .foregroundStyle(color)
                     .annotation(position: .top, spacing: 2) {
                         if labelled.contains(e.id) {
                             Text("\(Int(e.peak.rounded()))")
                                 .font(.loop(.caption2))
-                                .foregroundStyle(levelColor(e.peak))
+                                .foregroundStyle(color)
                         }
                     }
             }
@@ -152,6 +158,31 @@ struct NightChartCard: View {
         .accessibilityElement()
         .accessibilityLabel("Noise through the night")
         .accessibilityValue(accessibilityText(loud: loud))
+    }
+
+    /// Loud noises are coloured by what they were once labelled, and by loudness until then.
+    private func markColor(_ e: LoudEvent) -> Color {
+        NoiseLabels.category(of: e, in: session, hasAudio: hasAudio)?.color ?? levelColor(e.peak)
+    }
+
+    private func categoriesShown(_ loud: [LoudEvent]) -> [NoiseCategory] {
+        NoiseLabels.counts(loud, in: session, hasAudio: hasAudio).map(\.category)
+    }
+
+    /// Which colour is which kind of noise, for the categories on this chart.
+    private func categoryLegend(_ loud: [LoudEvent]) -> some View {
+        FlowLayout(spacing: 10) {
+            ForEach(categoriesShown(loud)) { c in
+                HStack(spacing: 4) {
+                    Circle().fill(c.color).frame(width: 8, height: 8)
+                    Text(c.name)
+                }
+            }
+        }
+        .font(.loop(.caption2))
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Noise types: " + categoriesShown(loud).map(\.name).joined(separator: ", "))
     }
 
     /// Keep the first and last time labels inside the chart.
