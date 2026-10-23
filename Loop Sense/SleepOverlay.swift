@@ -76,8 +76,10 @@ enum HealthSleep {
 
 /// Lines sleep stages up against the noise recording.
 struct SleepInsights {
-    /// e.g. "3 wake-ups · 2 after a noise", "7h 12m asleep · 1h 20m deep".
+    /// e.g. "3 wake-ups · 2 after a noise", "7h 12m asleep · 1h 20m deep". Most important first.
     let chips: [ReportChip]
+    /// Wake-ups that came within 2 minutes of a noise.
+    let noiseLinkedWakeups: Int
 
     /// Awake periods between first falling asleep and last waking, merging ones under a minute apart.
     nonisolated static func awakenings(in intervals: [SleepInterval]) -> [Date] {
@@ -132,6 +134,7 @@ struct SleepInsights {
             }
         }
 
+        noiseLinkedWakeups = noiseWakeups.count
         var chips: [ReportChip] = []
         let asleepSeconds = (seconds[.light] ?? 0) + (seconds[.deep] ?? 0) + (seconds[.rem] ?? 0)
 
