@@ -123,6 +123,10 @@ struct SessionDetailView: View {
 
                     labellingStatus
 
+                    if let sources = NoiseSources(events: a.events, session: current) {
+                        NoiseSourcesCard(sources: sources)
+                    }
+
                     if !byLoudness.isEmpty {
                         Card("Loudest moments") {
                             ForEach(byLoudness.prefix(3)) { event in
@@ -353,6 +357,31 @@ struct SessionDetailView: View {
                 .disabled(recorder.isRecording)
                 .accessibilityLabel(player.playingID == event.id ? "Stop" : "Play this noise")
             }
+        }
+    }
+}
+
+/// "What made the noise": the main source in one sentence and a small breakdown by category.
+private struct NoiseSourcesCard: View {
+    let sources: NoiseSources
+
+    var body: some View {
+        Card("What made the noise") {
+            Text(sources.finding)
+            Chart(sources.counts, id: \.category) { c in
+                BarMark(x: .value("Noises", c.count), y: .value("Kind", c.category.name))
+                    .foregroundStyle(c.category.color)
+                    .annotation(position: .trailing, spacing: 4) {
+                        Text("\(c.count)").font(.loop(.caption2)).monospacedDigit().foregroundStyle(.secondary)
+                    }
+            }
+            .chartXAxis(.hidden)
+            .chartYAxis {
+                AxisMarks { _ in AxisValueLabel().font(.loop(.caption2)) }
+            }
+            .frame(height: CGFloat(sources.counts.count) * 26 + 8)
+            .accessibilityElement()
+            .accessibilityLabel("Noises by kind: " + sources.counts.map { "\($0.category.name) \($0.count)" }.joined(separator: ", "))
         }
     }
 }
