@@ -1,33 +1,75 @@
 import Charts
 import SwiftUI
 
-/// One chart for the whole night: noise level on top, Garmin sleep stages as a band underneath,
-/// and noise events marked on the same time axis. Loads the stages itself.
+/// The words and marks for the "Through the night" card, kept apart from the view so they can be tested.
+nonisolated enum NightChartSummary {
+    /// Noises above this are marked on the chart; quieter ones are left out to keep it readable.
+    static let loudLimit = WHO.peakLimit
+    /// With many loud noises, only the loudest few are labelled with their dB value.
+    static let maxLabels = 5
+    /// Labels closer together than this share of the night would overlap, so only the louder one is kept.
+    static let minLabelGap = 0.08
+
+    /// "5 loud noises · 1 woke you", "No loud noises". `woke` is nil without Garmin data.
+    static func text(loud: Int, woke: Int?) -> String {
+        let noises = loud == 0 ? "No loud noises" : "\(loud) loud noise\(loud == 1 ? "" : "s")"
+        guard let woke, loud > 0 || woke > 0 else { return noises }
+        if woke == 0 { return noises + " · none woke you" }
+        return noises + " · \(woke) woke you"
+    }
+
+    /// The loud events, and which of them get a dB label: the loudest few, spaced so labels don't overlap.
+    static func marks(_ events: [LoudEvent], nightLength: TimeInterval) -> (loud: [LoudEvent], labelled: Set<UUID>) {
+        let loud = events.filter { $0.peak > loudLimit }
+        let gap = nightLength * minLabelGap
+        var chosen: [LoudEvent] = []
+        for e in loud.sorted(by: { $0.peak > $1.peak }) where chosen.count < maxLabels {
+            if chosen.allSatisfy({ abs($0.start.timeIntervalSince(e.start)) >= gap }) { chosen.append(e) }
+        }
+        return (loud, Set(chosen.map(\.id)))
+    }
+
+    /// Start, two times in between, and the end of the night.
+    static func axisTimes(from start: Date, to end: Date) -> [Date] {
+        let span = end.timeIntervalSince(start)
+        return [0, 1.0 / 3, 2.0 / 3, 1].map { start.addingTimeInterval(span * $0) }
+    }
+}
+
+/// One chart for the whole night: Garmin sleep stages as soft shading behind a single noise line,
+/// a green quiet zone below 30 dB, and only the loud noises marked. Loads the stages itself and
+/// hands them back through `stages` so the report can show the other sleep insights elsewhere.
 struct NightChartCard: View {
     let session: SleepSession
     let analysis: NightAnalysis
+    @Binding var stages: [SleepInterval]?
     @AppStorage("healthConnected") private var healthConnected = false
-    @State private var stages: [SleepInterval]?
     @State private var loading = false
     @State private var errorText: String?
 
+    private var insights: SleepInsights? {
+        guard let stages, !stages.isEmpty else { return nil }
+        return SleepInsights(intervals: stages, session: session, analysis: analysis)
+    }
+
     var body: some View {
+        let marks = NightChartSummary.marks(analysis.events, nightLength: analysis.end.timeIntervalSince(analysis.start))
         Card("Through the night") {
-            noiseChart
-            if let stages, !stages.isEmpty {
-                stageBand(stages)
-                ChipRow(chips: SleepInsights(intervals: stages, session: session, analysis: analysis).chips)
-            } else if loading {
-                ProgressView().frame(maxWidth: .infinity)
-            } else if stages != nil {
-                Text("No Garmin sleep data for this night.")
-                    .font(.loop(.caption)).foregroundStyle(.secondary)
-            } else {
+            Text(NightChartSummary.text(loud: marks.loud.count, woke: insights?.noiseLinkedWakeups))
+                .font(.loop(.subheadline))
+                .foregroundStyle(.secondary)
+            chart(loud: marks.loud, labelled: marks.labelled)
+            if hasStages {
+                legend
+            }
+            if let chip = insights?.chips.first {
+                ChipRow(chips: [chip])
+            } else if stages == nil, !loading {
                 Button {
                     Task { await load(requestAccess: true) }
                 } label: {
                     Label("Add Garmin sleep stages", systemImage: "heart.text.square")
-                        .font(.loop(.subheadline))
+                        .font(.loop(.caption))
                 }
                 .foregroundStyle(Color.loopAccent)
             }
@@ -48,67 +90,105 @@ struct NightChartCard: View {
 
     private var hasStages: Bool { !(stages ?? []).isEmpty }
 
-    private var noiseChart: some View {
-        Chart {
+    /// dB range shown: always includes the quiet zone, with room above the loudest marked noise for its label.
+    private func yRange(loud: [LoudEvent]) -> ClosedRange<Double> {
+        let averages = analysis.chart.map(\.average)
+        let low = min(averages.min() ?? WHO.averageLimit, WHO.averageLimit) - 5
+        let high = max(averages.max() ?? 50, loud.map(\.peak).max() ?? 0) + 8
+        return low...high
+    }
+
+    private func chart(loud: [LoudEvent], labelled: Set<UUID>) -> some View {
+        let y = yRange(loud: loud)
+        return Chart {
+            // Sleep stages behind everything, faint; awake a little stronger.
+            ForEach(stages ?? []) { s in
+                RectangleMark(xStart: .value("Start", s.start), xEnd: .value("End", s.end),
+                              yStart: .value("Bottom", y.lowerBound), yEnd: .value("Top", y.upperBound))
+                    .foregroundStyle(s.stage.color.opacity(s.stage == .awake ? 0.3 : 0.12))
+            }
+            // Quiet zone: below the WHO bedroom guideline.
+            RectangleMark(xStart: .value("Start", analysis.start), xEnd: .value("End", analysis.end),
+                          yStart: .value("Bottom", y.lowerBound), yEnd: .value("Top", WHO.averageLimit))
+                .foregroundStyle(Color.loopGood.opacity(0.2))
             ForEach(analysis.chart) { p in
-                AreaMark(x: .value("Time", p.time), yStart: .value("Avg", p.average), yEnd: .value("Peak", p.peak))
-                    .foregroundStyle(Color.loopRoseGold.opacity(0.3))
-                LineMark(x: .value("Time", p.time), y: .value("Average", p.average))
+                LineMark(x: .value("Time", p.time), y: .value("Level", p.average))
                     .foregroundStyle(Color.loopAccent)
                     .lineStyle(StrokeStyle(lineWidth: 1.5))
             }
-            ForEach(analysis.events) { e in
-                PointMark(x: .value("Time", e.start), y: .value("Peak", e.peak))
-                    .symbolSize(18)
+            ForEach(loud) { e in
+                PointMark(x: .value("Time", e.start), y: .value("Level", e.peak))
+                    .symbolSize(26)
                     .foregroundStyle(levelColor(e.peak))
+                    .annotation(position: .top, spacing: 2) {
+                        if labelled.contains(e.id) {
+                            Text("\(Int(e.peak.rounded()))")
+                                .font(.loop(.caption2))
+                                .foregroundStyle(levelColor(e.peak))
+                        }
+                    }
             }
-            RuleMark(y: .value("WHO", WHO.averageLimit))
-                .foregroundStyle(Color.loopSilver.opacity(0.7))
-                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                .annotation(position: .top, alignment: .leading) {
-                    Text("WHO 30 dB").font(.loop(.caption2)).foregroundStyle(Color.loopSilver)
-                }
         }
         .chartXScale(domain: analysis.start...analysis.end)
-        .chartXAxis(hasStages ? .hidden : .automatic)
-        .chartYScale(domain: .automatic(includesZero: false))
-        .chartYAxisLabel("dB")
-        .frame(height: 170)
-        .accessibilityLabel("Noise through the night, \(analysis.events.count) noise events")
-    }
-
-    private func stageBand(_ stages: [SleepInterval]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Chart {
-                ForEach(stages) { s in
-                    RectangleMark(xStart: .value("Start", s.start), xEnd: .value("End", s.end),
-                                  yStart: .value("Bottom", 0), yEnd: .value("Top", 1))
-                        .foregroundStyle(s.stage.color)
-                }
-                ForEach(analysis.events) { e in
-                    RuleMark(x: .value("Noise", e.start))
-                        .foregroundStyle(Color.white.opacity(0.25))
-                        .lineStyle(StrokeStyle(lineWidth: 1))
-                }
-            }
-            .chartXScale(domain: analysis.start...analysis.end)
-            .chartYAxis(.hidden)
-            .chartYScale(domain: 0...1)
-            .frame(height: 50)
-            .accessibilityLabel("Sleep stages from Garmin")
-
-            HStack(spacing: 12) {
-                ForEach(SleepStage.allCases, id: \.self) { stage in
-                    HStack(spacing: 4) {
-                        RoundedRectangle(cornerRadius: 2).fill(stage.color).frame(width: 10, height: 10)
-                        Text(stage.label)
+        .chartYScale(domain: y)
+        .chartXAxis {
+            let times = NightChartSummary.axisTimes(from: analysis.start, to: analysis.end)
+            AxisMarks(values: times) { value in
+                AxisValueLabel(anchor: anchor(for: value.index, of: times.count)) {
+                    if let date = value.as(Date.self) {
+                        Text(date.formatted(date: .omitted, time: .shortened)).font(.loop(.caption2))
                     }
                 }
-                Spacer(minLength: 0)
             }
-            .font(.loop(.caption2))
-            .foregroundStyle(.secondary)
         }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: [y.lowerBound + 3, y.upperBound - 3]) { value in
+                AxisValueLabel {
+                    Text(value.index == 0 ? "Quiet" : "Loud").font(.loop(.caption2))
+                }
+            }
+        }
+        .frame(height: 190)
+        .accessibilityElement()
+        .accessibilityLabel("Noise through the night")
+        .accessibilityValue(accessibilityText(loud: loud))
+    }
+
+    /// Keep the first and last time labels inside the chart.
+    private func anchor(for index: Int, of count: Int) -> UnitPoint {
+        switch index {
+        case 0: .topLeading
+        case count - 1: .topTrailing
+        default: .top
+        }
+    }
+
+    private func accessibilityText(loud: [LoudEvent]) -> String {
+        var text = "Average \(Int(analysis.average.rounded())) decibels. "
+            + NightChartSummary.text(loud: loud.count, woke: insights?.noiseLinkedWakeups) + "."
+        if let loudest = loud.max(by: { $0.peak < $1.peak }) {
+            text += " Loudest \(Int(loudest.peak.rounded())) decibels at \(loudest.start.formatted(date: .omitted, time: .shortened))."
+        }
+        if hasStages { text += " Sleep stages from Garmin are shaded behind." }
+        return text
+    }
+
+    /// Small and muted: it explains the shading but shouldn't compete with the noise line.
+    private var legend: some View {
+        HStack(spacing: 10) {
+            ForEach(SleepStage.allCases, id: \.self) { stage in
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(stage.color.opacity(stage == .awake ? 0.6 : 0.35))
+                        .frame(width: 7, height: 7)
+                    Text(stage.label)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.loop(.caption2))
+        .foregroundStyle(.tertiary)
+        .accessibilityHidden(true)
     }
 
     private func load(requestAccess: Bool) async {

@@ -5,6 +5,9 @@ struct ContentView: View {
     @EnvironmentObject private var recorder: NightRecorder
     @AppStorage("calibrationOffset") private var calibrationOffset = 95.0
     @AppStorage("saveAudio") private var saveAudio = true
+    @AppStorage(ClipGain.settingKey) private var boostClips = true
+    @AppStorage(AutoStop.enabledKey) private var autoStopEnabled = true
+    @AppStorage(AutoStop.minutesKey) private var autoStopMinutes = AutoStop.defaultMinutes
     /// The night just recorded, shown in the morning check-in.
     @State private var checkInSession: SleepSession?
     #if DEBUG
@@ -19,7 +22,8 @@ struct ContentView: View {
         NavigationStack {
             List {
                 Section {
-                    RecordPanel(calibrationOffset: calibrationOffset, saveAudio: saveAudio)
+                    RecordPanel(calibrationOffset: calibrationOffset, saveAudio: saveAudio,
+                                autoStopMinutes: autoStopEnabled ? autoStopMinutes : nil)
                 } header: {
                     // Drawn here rather than as a navigation title so it can use the brand font.
                     Text("Loop Sense")
@@ -61,6 +65,16 @@ struct ContentView: View {
 
                 Section {
                     Toggle("Save audio recording", isOn: $saveAudio)
+                    if saveAudio {
+                        Toggle("Boost quiet clips", isOn: $boostClips)
+                    }
+                    Toggle("Stop automatically", isOn: $autoStopEnabled)
+                    if autoStopEnabled {
+                        DatePicker("Stop at", selection: Binding(
+                            get: { AutoStop.pickerDate(minutes: autoStopMinutes) },
+                            set: { autoStopMinutes = AutoStop.minutes(from: $0) }
+                        ), displayedComponents: .hourAndMinute)
+                    }
                     VStack(alignment: .leading) {
                         Text("Calibration offset: +\(Int(calibrationOffset)) dB")
                         Slider(value: $calibrationOffset, in: 70...120, step: 1)
@@ -68,7 +82,7 @@ struct ContentView: View {
                 } header: {
                     Text("Settings")
                 } footer: {
-                    Text("Saving audio lets you play back loud moments (about 15 MB per hour). The calibration offset converts the microphone's digital level to approximate real-world decibels. To calibrate, compare with a sound meter and adjust until the live readings match. Changes apply to new recordings.")
+                    Text("Saving audio lets you play back loud moments (about 15 MB per hour). Boost makes played-back noises easier to hear; recordings and readings aren't changed. With automatic stop on, recording ends at the set time and the report is ready when you wake. The calibration offset converts the microphone's digital level to approximate real-world decibels. To calibrate, compare with a sound meter and adjust until the live readings match. Changes apply to new recordings.")
                 }
                 .listRowBackground(Color.loopSurface)
                 .disabled(recorder.isRecording)
@@ -126,6 +140,8 @@ private struct RecordPanel: View {
     @EnvironmentObject private var recorder: NightRecorder
     let calibrationOffset: Double
     let saveAudio: Bool
+    /// Morning stop time in minutes after midnight, or nil when automatic stop is off.
+    let autoStopMinutes: Int?
     @State private var bedtimeWarnings: [String] = []
 
     var body: some View {
@@ -139,6 +155,11 @@ private struct RecordPanel: View {
                 Text("Recording for \(Text(start, style: .timer))")
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                if let stop = recorder.stopDate {
+                    Label("Stops at \(stop.formatted(date: .omitted, time: .shortened))", systemImage: "alarm")
+                        .font(.loop(.footnote))
+                        .foregroundStyle(.secondary)
+                }
                 Text("You can lock your phone. Recording continues in the background.")
                     .font(.loop(.footnote))
                     .foregroundStyle(.secondary)
@@ -184,7 +205,8 @@ private struct RecordPanel: View {
     }
 
     private func startRecording() {
-        Task { await recorder.start(calibrationOffset: calibrationOffset, saveAudio: saveAudio) }
+        let stopAt = autoStopMinutes.map { AutoStop.stopDate(after: Date(), minutes: $0) }
+        Task { await recorder.start(calibrationOffset: calibrationOffset, saveAudio: saveAudio, stopAt: stopAt) }
     }
 }
 

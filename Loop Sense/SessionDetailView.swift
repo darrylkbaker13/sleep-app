@@ -15,6 +15,8 @@ struct SessionDetailView: View {
     @State private var editingCheckIn = false
     @State private var showingAbout = false
     @State private var moreDetailOpen = false
+    /// Garmin sleep stages, loaded by the night chart and shared with the sleep card.
+    @State private var stages: [SleepInterval]?
 
     /// The latest saved copy, so check-in edits show straight away.
     private var current: SleepSession {
@@ -93,7 +95,7 @@ struct SessionDetailView: View {
                         StatTile(title: "Noises", count: a.events.count, caption: "\(a.eventsOverWHOPeak) over 45")
                     }
 
-                    NightChartCard(session: session, analysis: a)
+                    NightChartCard(session: session, analysis: a, stages: $stages)
 
                     if !byLoudness.isEmpty {
                         Card("Loudest moments") {
@@ -117,6 +119,16 @@ struct SessionDetailView: View {
                     }
 
                     SleepNotesCard(session: current) { editingCheckIn = true }
+
+                    // The chart card shows only the most important sleep insight; the rest live here.
+                    if let stages, !stages.isEmpty {
+                        let more = SleepInsights(intervals: stages, session: session, analysis: a).chips.dropFirst()
+                        if !more.isEmpty {
+                            Card("Your sleep") {
+                                ChipRow(chips: Array(more))
+                            }
+                        }
+                    }
 
                     EarplugCard(recommendation: EarplugRecommendation(average: a.average, peak: a.peak))
 
@@ -211,7 +223,8 @@ struct SessionDetailView: View {
                     if player.playingID == event.id {
                         player.stop()
                     } else {
-                        player.play(url: audio, from: event.audioOffset - 2, duration: event.duration + 4, id: event.id)
+                        player.play(url: audio, from: event.audioOffset - 2, duration: event.duration + 4, id: event.id,
+                                    background: analysis.map { $0.background - session.calibrationOffset })
                     }
                 } label: {
                     Image(systemName: player.playingID == event.id ? "stop.circle.fill" : "play.circle.fill")
@@ -398,37 +411,3 @@ private struct ClassifierSpikeCard: View {
     }
 }
 #endif
-
-@MainActor
-final class ClipPlayer: ObservableObject {
-    @Published private(set) var playingID: UUID?
-    private var player: AVAudioPlayer?
-    private var stopTask: Task<Void, Never>?
-
-    func play(url: URL, from start: TimeInterval, duration: TimeInterval, id: UUID) {
-        stop()
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback)
-            try AVAudioSession.sharedInstance().setActive(true)
-            let p = try AVAudioPlayer(contentsOf: url)
-            p.currentTime = max(0, start)
-            p.play()
-            player = p
-            playingID = id
-            stopTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(duration))
-                if !Task.isCancelled { self?.stop() }
-            }
-        } catch {
-            print("Playback failed: \(error)")
-        }
-    }
-
-    func stop() {
-        stopTask?.cancel()
-        stopTask = nil
-        player?.stop()
-        player = nil
-        playingID = nil
-    }
-}
