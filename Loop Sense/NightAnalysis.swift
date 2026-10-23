@@ -230,3 +230,71 @@ nonisolated enum CSVExporter {
         return url
     }
 }
+
+/// Which kind of noise caused most of the night's events (I2e), from the stored labels (I2c).
+nonisolated struct NoiseSources {
+    let total: Int
+    /// Events per category, most first.
+    let counts: [(category: NoiseCategory, count: Int)]
+    /// One sentence for the report, e.g. "Most noises were traffic (12 of 20), mainly between 05:00 and 07:00."
+    let finding: String
+
+    /// nil until the night has been labelled, or when it had no noise events.
+    init?(events: [LoudEvent], session: SleepSession, calendar: Calendar = .current) {
+        guard session.eventLabels != nil, !events.isEmpty else { return nil }
+        let labelled = events.map { ($0, session.label(for: $0)?.noiseCategory ?? .unknown) }
+        total = labelled.count
+        counts = Dictionary(grouping: labelled.map(\.1), by: { $0 }).map { ($0.key, $0.value.count) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.category.name < $1.category.name }
+
+        let unknown = counts.first { $0.category == .unknown }?.count ?? 0
+        let named = counts.filter { $0.category != .unknown }
+        guard let main = named.first, unknown * 2 <= total else {
+            finding = "Most noises couldn't be identified (\(unknown) of \(total))."
+            return
+        }
+        let share = "(\(main.count) of \(total))"
+        var sentence = main.count * 2 > total
+            ? "Most noises were \(Self.inSentence(main.category)) \(share)"
+            : "The most common noise was \(Self.inSentence(main.category)) \(share)"
+        let times = labelled.filter { $0.1 == main.category }.map(\.0.start)
+        if let window = Self.busyWindow(times, nightLength: session.duration, calendar: calendar) {
+            let f = Date.FormatStyle(date: .omitted, time: .shortened, timeZone: calendar.timeZone)
+            sentence += ", mainly between \(window.start.formatted(f)) and \(window.end.formatted(f))"
+        }
+        if unknown > 0 { sentence += ". \(unknown) couldn't be identified" }
+        finding = sentence + "."
+    }
+
+    /// How a category reads after "Most noises were …": "traffic", "music or TV", "people talking or coughing".
+    static func inSentence(_ category: NoiseCategory) -> String {
+        switch category {
+        case .snoring: "snoring"
+        case .speech: "people talking or coughing"
+        case .traffic: "traffic"
+        case .aircraft: "aircraft"
+        case .animals: "animals"
+        case .household: "household sounds"
+        case .weather: "weather sounds"
+        case .musicTV: "music or TV"
+        case .alarmPhone: "alarms or phones"
+        case .other: "other sounds"
+        case .unknown: "unidentified"
+        }
+    }
+
+    /// The two-hour window (on the hour) holding at least 60% of these noises, if there's a clear one.
+    /// Skipped for short nights and for fewer than three noises, where it would say nothing useful.
+    static func busyWindow(_ times: [Date], nightLength: TimeInterval, calendar: Calendar) -> (start: Date, end: Date)? {
+        guard times.count >= 3, nightLength >= 3 * 3600 else { return nil }
+        let hours = times.compactMap { calendar.dateInterval(of: .hour, for: $0)?.start }
+        var best: (start: Date, count: Int)?
+        for h in Set(hours) {
+            let end = h.addingTimeInterval(2 * 3600)
+            let n = times.filter { $0 >= h && $0 < end }.count
+            if n > (best?.count ?? 0) || (n == best?.count && h < best!.start) { best = (h, n) }
+        }
+        guard let best, Double(best.count) >= 0.6 * Double(times.count) else { return nil }
+        return (best.start, best.start.addingTimeInterval(2 * 3600))
+    }
+}
