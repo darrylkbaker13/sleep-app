@@ -17,6 +17,16 @@ nonisolated struct SleepSession: Codable, Identifiable {
     var tags: [String]? = nil
     /// Earplugs worn that night: a Loop model name or `SleepNotes.otherEarplugs`. nil means none.
     var earplugs: String? = nil
+    /// What each noise event was, from the sound classifier after the night (I2c). nil until labelled.
+    var eventLabels: [EventLabel]? = nil
+    /// Which version of the labelling rules produced `eventLabels`, so they can be redone if the rules change.
+    var labelsVersion: Int? = nil
+
+    /// The stored label for a noise event, matched by when it started.
+    func label(for event: LoudEvent) -> EventLabel? {
+        let second = EventLabel.second(of: event, in: self)
+        return eventLabels?.first { $0.second == second }
+    }
 
     var effectiveEnd: Date { end ?? start.addingTimeInterval(Double(levels.count)) }
     var duration: TimeInterval { effectiveEnd.timeIntervalSince(start) }
@@ -29,6 +39,25 @@ nonisolated struct SleepSession: Codable, Identifiable {
             n += 1
         }
         return n == 0 ? nil : 10 * log10(energy / Double(n))
+    }
+}
+
+/// The classifier's verdict on one noise event, saved with the night.
+nonisolated struct EventLabel: Codable, Equatable {
+    /// Seconds from the start of the night to the event (events are recomputed each time, so this is the key).
+    let second: Int
+    /// A NoiseCategory raw value.
+    var category: String
+    var confidence: Double
+    /// The classifier label that decided it, e.g. "dog_bark". nil for a correction.
+    var label: String?
+    /// True when the sleeper fixed the label by hand; labelling never overwrites these.
+    var corrected: Bool? = nil
+
+    var noiseCategory: NoiseCategory { NoiseCategory(rawValue: category) ?? .unknown }
+
+    static func second(of event: LoudEvent, in session: SleepSession) -> Int {
+        Int(event.start.timeIntervalSince(session.start).rounded())
     }
 }
 

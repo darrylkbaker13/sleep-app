@@ -35,14 +35,7 @@ nonisolated enum SoundClassifier {
     /// `events` use `audioOffset`, which already skips gaps where the mic was off.
     static func classify(fileAt url: URL, events: [LoudEvent], topCount: Int = 3) throws -> Result {
         let started = Date()
-        let analyzer = try SNAudioFileAnalyzer(url: url)
-        let request = try SNClassifySoundRequest(classifierIdentifier: .version1)
-        let observer = Observer()
-        try analyzer.add(request, withObserver: observer)
-        analyzer.analyze()
-        if let error = observer.error { throw error }
-
-        let windows = observer.windows
+        let windows = try Self.windows(fileAt: url)
         let audioDuration = windows.map { $0.start + $0.duration }.max() ?? 0
         let results = events.map { event in
             // Pad by half a second either side: events are timed to the second.
@@ -60,6 +53,36 @@ nonisolated enum SoundClassifier {
         }
         return Result(audioDuration: audioDuration, processingTime: Date().timeIntervalSince(started),
                       windows: windows, events: results)
+    }
+
+    /// Classifies a whole file and returns its windows. `progress` gets 0...1 as it goes, on the
+    /// analysis thread. Keep the analyzer passed to `started` to cancel from elsewhere.
+    static func windows(fileAt url: URL, progress: ((Double) -> Void)? = nil,
+                        started: ((SNAudioFileAnalyzer) -> Void)? = nil) throws -> [Window] {
+        let file = try AVAudioFile(forReading: url)
+        let length = Double(file.length) / file.processingFormat.sampleRate
+        let analyzer = try SNAudioFileAnalyzer(url: url)
+        let request = try SNClassifySoundRequest(classifierIdentifier: .version1)
+        let observer = Observer()
+        if let progress, length > 0 {
+            var last = -1.0
+            observer.onWindow = { w in
+                let p = min(1, (w.start + w.duration) / length)
+                if p - last >= 0.02 { last = p; progress(p) }
+            }
+        }
+        try analyzer.add(request, withObserver: observer)
+        started?(analyzer)
+        analyzer.analyze()
+        if let error = observer.error { throw error }
+        return observer.windows
+    }
+
+    /// The windows overlapping one event (padded half a second either side: events are timed to the second).
+    static func windows(_ windows: [Window], for event: LoudEvent) -> [Window] {
+        let from = event.audioOffset - 0.5
+        let to = event.audioOffset + event.duration + 0.5
+        return windows.filter { $0.start < to && $0.start + $0.duration > from }
     }
 
     /// Classifies a short clip already in memory, e.g. one highlight. Returns its windows.
@@ -123,14 +146,16 @@ nonisolated enum SoundClassifier {
     private final class Observer: NSObject, SNResultsObserving {
         var windows: [Window] = []
         var error: Error?
+        var onWindow: ((Window) -> Void)?
 
         func request(_ request: SNRequest, didProduce result: SNResult) {
             guard let r = result as? SNClassificationResult else { return }
             let labels = r.classifications.prefix(10).map {
                 Label(identifier: $0.identifier, confidence: $0.confidence)
             }
-            windows.append(Window(start: r.timeRange.start.seconds, duration: r.timeRange.duration.seconds,
-                                  labels: labels))
+            let window = Window(start: r.timeRange.start.seconds, duration: r.timeRange.duration.seconds, labels: labels)
+            windows.append(window)
+            onWindow?(window)
         }
 
         func request(_ request: SNRequest, didFailWithError error: Error) {
