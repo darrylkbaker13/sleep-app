@@ -44,7 +44,7 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            ContentView()
+            MainTabView()
             if !hasOnboarded {
                 OnboardingView {
                     withAnimation(.easeInOut(duration: 0.4)) { hasOnboarded = true }
