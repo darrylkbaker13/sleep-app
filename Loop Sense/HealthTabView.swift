@@ -218,30 +218,3 @@ struct MetricTile: View {
         .accessibilityHint("Opens details")
     }
 }
-
-/// Detail for one metric. H3 adds the overnight chart against bedroom noise.
-struct MetricDetailView: View {
-    let metric: HealthMetric
-    let snapshots: [DailySnapshot]
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Card("Last 14 days") {
-                    let recent = Array(snapshots.filter { metric.value(in: $0) != nil }.suffix(14))
-                    Chart(recent) { s in
-                        BarMark(x: .value("Day", s.day, unit: .day), y: .value(metric.name, metric.value(in: s) ?? 0))
-                            .foregroundStyle(Color.loopAccent)
-                    }
-                    .frame(height: 180)
-                }
-            }
-            .padding()
-        }
-        .loopBackground()
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) { Text(metric.name).font(.loop(.headline)) }
-        }
-    }
-}
