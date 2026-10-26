@@ -37,17 +37,3 @@ struct MainTabView: View {
         .tint(Color.loopAccent)
     }
 }
-
-/// Placeholder until the Garmin dashboard (H2) is built.
-struct HealthTabView: View {
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView {
-                Label("Health", systemImage: "waveform.path.ecg")
-            } description: {
-                Text("Your Garmin sleep and body data from Apple Health will appear here.")
-            }
-            .loopBackground()
-        }
-    }
-}

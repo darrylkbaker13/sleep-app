@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: SessionStore
     @EnvironmentObject private var recorder: NightRecorder
+    @EnvironmentObject private var health: HealthDataStore
     @AppStorage("calibrationOffset") private var calibrationOffset = 95.0
     @AppStorage("saveAudio") private var saveAudio = true
     @AppStorage(ClipGain.settingKey) private var boostClips = true
@@ -40,6 +41,29 @@ struct SettingsView: View {
                 .listRowBackground(Color.loopSurface)
                 .disabled(recorder.isRecording)
 
+                Section {
+                    if health.connected {
+                        Label("Connected", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(Color.loopGood)
+                        let missing = HealthCoverage.missing(in: health.snapshots)
+                        if !health.snapshots.isEmpty, !missing.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Not arriving from Garmin")
+                                Text(missing.map(\.name).joined(separator: ", "))
+                                    .font(.loop(.caption)).foregroundStyle(.secondary)
+                            }
+                        }
+                    } else {
+                        Button("Connect Apple Health") { Task { await health.connect() } }
+                            .foregroundStyle(Color.loopAccent)
+                    }
+                } header: {
+                    Text("Apple Health")
+                } footer: {
+                    Text("Loop Sense reads your Garmin data from Apple Health and never writes to it. Missing tiles on the Health tab mean Garmin Connect isn't sharing that data. \(HealthCoverage.neverSynced)")
+                }
+                .listRowBackground(Color.loopSurface)
+
                 #if DEBUG
                 Section {
                     Button(addingDemo ? "Adding demo nights…" : "Add 7 demo nights") {
@@ -56,7 +80,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Demo data")
                 } footer: {
-                    Text("Debug builds only. Adds seven made-up nights with Garmin-style sleep stages for testing. Remove deletes only these, never real recordings.")
+                    Text("Debug builds only. Adds seven made-up nights with Garmin-style sleep stages, plus 21 days of made-up Garmin health data on the Health tab, for testing. Remove deletes only these, never real recordings.")
                 }
                 .listRowBackground(Color.loopSurface)
                 .disabled(recorder.isRecording)
