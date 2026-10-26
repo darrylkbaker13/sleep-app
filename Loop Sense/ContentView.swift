@@ -1,18 +1,16 @@
 import SwiftUI
+import UIKit
 
+/// The Sleep tab: start tracking, last night at a glance, then past nights.
 struct ContentView: View {
     @EnvironmentObject private var store: SessionStore
     @EnvironmentObject private var recorder: NightRecorder
     @AppStorage("calibrationOffset") private var calibrationOffset = 95.0
     @AppStorage("saveAudio") private var saveAudio = true
-    @AppStorage(ClipGain.settingKey) private var boostClips = true
     @AppStorage(AutoStop.enabledKey) private var autoStopEnabled = true
     @AppStorage(AutoStop.minutesKey) private var autoStopMinutes = AutoStop.defaultMinutes
     /// The night just recorded, shown in the morning check-in.
     @State private var checkInSession: SleepSession?
-    #if DEBUG
-    @State private var addingDemo = false
-    #endif
 
     private var pastSessions: [SleepSession] {
         store.sessions.filter { $0.id != recorder.activeSessionID }
@@ -35,18 +33,21 @@ struct ContentView: View {
                 }
                 .listRowBackground(Color.loopSurface)
 
+                if let lastNight = pastSessions.first, !recorder.isRecording {
+                    Section("Last night") {
+                        NavigationLink {
+                            SessionDetailView(session: lastNight)
+                        } label: {
+                            LastNightCard(session: lastNight)
+                        }
+                    }
+                    .listRowBackground(Color.loopSurface)
+                }
+
                 Section("Past nights") {
                     if pastSessions.isEmpty {
                         Text("No recordings yet. Tap Start before bed.")
                             .foregroundStyle(.secondary)
-                    }
-                    if pastSessions.count >= 2 {
-                        NavigationLink {
-                            TrendsView()
-                        } label: {
-                            Label("Trends across nights", systemImage: "chart.bar.xaxis")
-                                .foregroundStyle(Color.loopAccent)
-                        }
                     }
                     ForEach(pastSessions) { session in
                         NavigationLink {
@@ -62,52 +63,6 @@ struct ContentView: View {
                     }
                 }
                 .listRowBackground(Color.loopSurface)
-
-                Section {
-                    Toggle("Save audio recording", isOn: $saveAudio)
-                    if saveAudio {
-                        Toggle("Boost quiet clips", isOn: $boostClips)
-                    }
-                    Toggle("Stop automatically", isOn: $autoStopEnabled)
-                    if autoStopEnabled {
-                        DatePicker("Stop at", selection: Binding(
-                            get: { AutoStop.pickerDate(minutes: autoStopMinutes) },
-                            set: { autoStopMinutes = AutoStop.minutes(from: $0) }
-                        ), displayedComponents: .hourAndMinute)
-                    }
-                    VStack(alignment: .leading) {
-                        Text("Calibration offset: +\(Int(calibrationOffset)) dB")
-                        Slider(value: $calibrationOffset, in: 70...120, step: 1)
-                    }
-                } header: {
-                    Text("Settings")
-                } footer: {
-                    Text("Saving audio lets you play back loud moments (about 15 MB per hour). Boost makes played-back noises easier to hear; recordings and readings aren't changed. With automatic stop on, recording ends at the set time and the report is ready when you wake. The calibration offset converts the microphone's digital level to approximate real-world decibels. To calibrate, compare with a sound meter and adjust until the live readings match. Changes apply to new recordings.")
-                }
-                .listRowBackground(Color.loopSurface)
-                .disabled(recorder.isRecording)
-
-                #if DEBUG
-                Section {
-                    Button(addingDemo ? "Adding demo nights…" : "Add 7 demo nights") {
-                        addingDemo = true
-                        Task {
-                            await DemoData.add(to: store)
-                            addingDemo = false
-                        }
-                    }
-                    .disabled(addingDemo)
-                    if DemoData.count(in: store) > 0 {
-                        Button("Remove demo nights", role: .destructive) { DemoData.remove(from: store) }
-                    }
-                } header: {
-                    Text("Demo data")
-                } footer: {
-                    Text("Debug builds only. Adds seven made-up nights with Garmin-style sleep stages for testing. Remove deletes only these, never real recordings.")
-                }
-                .listRowBackground(Color.loopSurface)
-                .disabled(recorder.isRecording)
-                #endif
             }
             .loopBackground()
             .onChange(of: recorder.activeSessionID) { finished, current in
@@ -182,7 +137,7 @@ private struct RecordPanel: View {
                     if warnings.isEmpty { startRecording() } else { bedtimeWarnings = warnings }
                 }
             } label: {
-                Label(recorder.isRecording ? "Stop & analyze" : "Start sleep recording",
+                Label(recorder.isRecording ? "Stop & analyze" : "Start sleep tracking",
                       systemImage: recorder.isRecording ? "stop.fill" : "record.circle")
                     .frame(maxWidth: .infinity)
             }
@@ -190,6 +145,10 @@ private struct RecordPanel: View {
             .tint(recorder.isRecording ? Color.loopRed : Color.loopAccent)
             .foregroundStyle(Color.loopOnAccent)
             .controlSize(.large)
+
+            if !recorder.isRecording {
+                RecordingStatus(saveAudio: saveAudio, autoStopMinutes: autoStopMinutes)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -207,6 +166,118 @@ private struct RecordPanel: View {
     private func startRecording() {
         let stopAt = autoStopMinutes.map { AutoStop.stopDate(after: Date(), minutes: $0) }
         Task { await recorder.start(calibrationOffset: calibrationOffset, saveAudio: saveAudio, stopAt: stopAt) }
+    }
+}
+
+/// Small status line under the Start button: auto stop, audio and charging.
+private struct RecordingStatus: View {
+    let saveAudio: Bool
+    let autoStopMinutes: Int?
+    @State private var battery = BatteryStatus.current()
+
+    var body: some View {
+        HStack(spacing: 14) {
+            if let m = autoStopMinutes {
+                Label("Stops \(AutoStop.pickerDate(minutes: m).formatted(date: .omitted, time: .shortened))", systemImage: "alarm")
+            } else {
+                Label("No auto stop", systemImage: "alarm")
+            }
+            Label(saveAudio ? "Audio on" : "Audio off", systemImage: saveAudio ? "waveform" : "waveform.slash")
+            Label(battery.text, systemImage: battery.symbol)
+                .foregroundStyle(battery.isConcern ? Color.loopWarn : Color.secondary)
+        }
+        .font(.loop(.caption))
+        .foregroundStyle(.secondary)
+        .labelStyle(CompactLabelStyle())
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.batteryStateDidChangeNotification)) { _ in
+            battery = BatteryStatus.current()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.batteryLevelDidChangeNotification)) { _ in
+            battery = BatteryStatus.current()
+        }
+        .onAppear { battery = BatteryStatus.current() }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct CompactLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) { configuration.icon; configuration.title }
+    }
+}
+
+/// Charging state for the status line. Battery monitoring stays on while the Sleep tab is shown.
+struct BatteryStatus {
+    let text: String
+    let symbol: String
+    /// Unplugged and under the bedtime-check threshold.
+    let isConcern: Bool
+
+    @MainActor static func current() -> BatteryStatus {
+        let device = UIDevice.current
+        device.isBatteryMonitoringEnabled = true
+        let level = device.batteryLevel
+        switch device.batteryState {
+        case .charging, .full:
+            return BatteryStatus(text: "Charging", symbol: "battery.100.bolt", isConcern: false)
+        case .unplugged where level >= 0:
+            let pct = Int((level * 100).rounded())
+            return BatteryStatus(text: "\(pct)%", symbol: "battery.50", isConcern: level < BedtimeChecks.minimumUnpluggedBattery)
+        default:
+            return BatteryStatus(text: "Battery", symbol: "battery.50", isConcern: false)
+        }
+    }
+}
+
+/// Last night at a glance: headline, noises, main source and time asleep. Opens the report.
+private struct LastNightCard: View {
+    let session: SleepSession
+    @AppStorage("healthConnected") private var healthConnected = false
+    @State private var analysis: NightAnalysis?
+    @State private var asleep: TimeInterval?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(session.start, format: .dateTime.weekday(.wide).day().month())
+                .font(.loop(.caption)).foregroundStyle(.secondary)
+            if let a = analysis {
+                Text(a.headline)
+                    .font(.loop(.title3))
+                    .foregroundStyle(a.verdictTone.color)
+                Text(a.subline).font(.loop(.subheadline))
+                let source = NoiseSources(events: a.events, session: session)
+                if let source, let main = source.counts.first(where: { $0.category != .unknown }) {
+                    Label("Mostly \(NoiseSources.inSentence(main.category)) (\(main.count) of \(source.total))",
+                          systemImage: main.category.symbol)
+                        .font(.loop(.caption))
+                        .foregroundStyle(main.category.color)
+                }
+                if let asleep {
+                    Label("\(formatDuration(asleep)) asleep", systemImage: "bed.double.fill")
+                        .font(.loop(.caption)).foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Recording too short for a report").foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+        .task(id: session.id) {
+            let s = session
+            analysis = await Task.detached(priority: .userInitiated) { NightAnalysis(session: s) }.value
+            asleep = await timeAsleep()
+        }
+    }
+
+    private func timeAsleep() async -> TimeInterval? {
+        var stages: [SleepInterval] = []
+        #if DEBUG
+        if DemoData.isDemo(session) { stages = DemoData.stages(for: session) }
+        #endif
+        if stages.isEmpty, healthConnected, HealthSleep.isAvailable {
+            stages = (try? await HealthSleep.intervals(from: session.start, to: session.effectiveEnd)) ?? []
+        }
+        let total = stages.filter { $0.stage != .awake }.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
+        return total > 0 ? total : nil
     }
 }
 
