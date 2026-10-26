@@ -46,6 +46,41 @@ nonisolated enum DemoHealth {
     }
 }
 
+extension DemoHealth {
+    /// Made-up overnight readings for a demo night: heart rate every minute (lower in deep sleep,
+    /// higher when awake, so wake-ups after loud noises show as jumps), and the others every 5 minutes.
+    static func overnight(_ metric: HealthMetric, for night: SleepSession) -> [SnapshotBuilder.Sample] {
+        let stages = DemoData.stages(for: night)
+        guard let first = stages.first?.start, let last = stages.last?.end else { return [] }
+        var rng = DemoRNG(state: UInt64(abs(night.start.timeIntervalSince1970)) &+ UInt64(metric.rawValue.count))
+        let step: TimeInterval = metric == .restingHR ? 60 : 300
+        var out: [SnapshotBuilder.Sample] = []
+        var t = first
+        var drift = 0.0
+        while t < last {
+            let stage = stages.first { $0.start <= t && $0.end > t }?.stage ?? .light
+            drift = max(-2, min(2, drift + rng.double(-0.4...0.4)))
+            let value: Double
+            switch metric {
+            case .restingHR:
+                let adjust: Double = switch stage { case .deep: -4; case .light: 0; case .rem: 3; case .awake: 17 }
+                value = 56 + adjust + drift + rng.double(-1...1)
+            case .hrv:
+                value = (stage == .deep ? 60 : stage == .awake ? 32 : 48) + drift * 2 + rng.double(-4...4)
+            case .respiratoryRate:
+                value = 14.3 + (stage == .awake ? 1.5 : 0) + drift * 0.2 + rng.double(-0.4...0.4)
+            case .oxygen:
+                value = 96 + drift * 0.3 + rng.double(-0.8...0.8)
+            default:
+                return []
+            }
+            out.append(SnapshotBuilder.Sample(start: t, end: t.addingTimeInterval(step), value: value, source: "com.garmin.connect.mobile (demo)"))
+            t = t.addingTimeInterval(step)
+        }
+        return out
+    }
+}
+
 /// Repeatable random numbers so the demo looks the same every time.
 nonisolated struct DemoRNG {
     var state: UInt64
