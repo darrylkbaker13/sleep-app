@@ -335,7 +335,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Loop-Sense-Info.plist";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads your Garmin sleep stages to show how noise affected your sleep.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads your Garmin sleep, heart rate, HRV, breathing, blood oxygen and activity to show how your nights and body compare with what is normal for you.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Loop Sense does not write to Apple Health.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Measures how loud your bedroom is while you sleep.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -374,7 +374,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Loop-Sense-Info.plist";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads your Garmin sleep stages to show how noise affected your sleep.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads your Garmin sleep, heart rate, HRV, breathing, blood oxygen and activity to show how your nights and body compare with what is normal for you.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Loop Sense does not write to Apple Health.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Measures how loud your bedroom is while you sleep.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
