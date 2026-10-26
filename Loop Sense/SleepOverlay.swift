@@ -33,7 +33,7 @@ nonisolated struct SleepInterval: Identifiable {
     let source: String
 }
 
-enum HealthSleep {
+nonisolated enum HealthSleep {
     static let store = HKHealthStore()
 
     static var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
@@ -44,8 +44,16 @@ enum HealthSleep {
 
     /// Sleep stages overlapping the recording, clipped to it.
     static func intervals(from start: Date, to end: Date) async throws -> [SleepInterval] {
-        let predicate = HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-3600),
-                                                    end: end.addingTimeInterval(3600))
+        try await rawIntervals(from: start.addingTimeInterval(-3600), to: end.addingTimeInterval(3600))
+            .compactMap { i in
+                let s = max(i.start, start), e = min(i.end, end)
+                return e > s ? SleepInterval(start: s, end: e, stage: i.stage, source: i.source) : nil
+            }
+    }
+
+    /// Sleep stages that start or end in a span, unclipped, Garmin preferred.
+    static func rawIntervals(from start: Date, to end: Date) async throws -> [SleepInterval] {
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.categorySample(type: HKCategoryType(.sleepAnalysis), predicate: predicate)],
             sortDescriptors: [SortDescriptor(\.startDate)])
@@ -61,10 +69,7 @@ enum HealthSleep {
             case .asleepDeep: stage = .deep
             default: return nil // "in bed" isn't a sleep stage
             }
-            let s = max(sample.startDate, start)
-            let e = min(sample.endDate, end)
-            guard e > s else { return nil }
-            return SleepInterval(start: s, end: e, stage: stage,
+            return SleepInterval(start: sample.startDate, end: sample.endDate, stage: stage,
                                  source: sample.sourceRevision.source.bundleIdentifier)
         }
         // If Garmin wrote stages, ignore other sources (like the iPhone's sleep schedule) so they don't overlap.
